@@ -1,0 +1,8 @@
+{
+  "name": "agentoppa",
+  "private": true,
+  "description": "Cross-agent · cross-OS harness Maker for Claude Code and Codex.",
+  "scripts": {
+    "test": "node --test \"test/**/*.test.mjs\""
+  }
+}

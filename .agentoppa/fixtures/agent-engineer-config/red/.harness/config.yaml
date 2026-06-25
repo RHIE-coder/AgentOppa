@@ -1,0 +1,5 @@
+harness: demo-broken
+feature: demo
+sync:    medium
+phases:
+  - review

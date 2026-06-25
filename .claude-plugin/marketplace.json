@@ -1,0 +1,13 @@
+{
+  "name": "agentoppa",
+  "owner": {
+    "name": "agentoppa"
+  },
+  "plugins": [
+    {
+      "name": "agentoppa",
+      "source": "./plugins/agentoppa",
+      "description": "Cross-agent · cross-OS harness for Claude Code and Codex."
+    }
+  ]
+}

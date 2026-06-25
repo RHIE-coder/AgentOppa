@@ -1,0 +1,9 @@
+# AGENTS.md — AgentOppa 자기 불변식 (always-on · 바운드)
+
+> AgentOppa repo *자신*에 적용되는 횡단 불변식만. **바운드:** 새 항목이 예산(줄/바이트, ccc-memory가 강제)을 넘기려 하면 → 하나를 validator로 기계화해 빼거나 둘을 합쳐라(append 금지). 기계화 가능한 규칙은 여기가 아니라 해당 `scripts/validate.mjs`로. `self-harden` 스킬이 이 파일의 게이트키퍼다.
+
+- **크로스툴 동일 품질** — 모든 컴포넌트는 Claude·Codex 양쪽에서 동작한다. 갈리는 지점만 도구별로 분기. 헬퍼 스크립트는 Node 빌트인(zero-dep, 크로스OS).
+- **작업 사이 상태는 커밋된 문서로 넘긴다** — 앞 단계가 남긴 문서를 다음 단계가 받는다. 전용 실행기를 따로 만들지 않는다 (그래서 resume·병렬이 공짜).
+- **지속 메모리 = project-committed** — 머신로컬·user-scope 저장 거부. 상시 로딩은 최소, 상세는 `references/`로 (3층 점진 로딩).
+- **프레임워크 ≠ 콘텐츠** — 규격(`references/`)은 도메인 무관·고정. 콘텐츠(실제 phase)는 *유저 프로젝트의* `.harness/project/`에 산다 — AgentOppa는 샘플 콘텐츠를 싣지 않는다. 견본은 `examples/`(설명용). 절대 섞지 않는다.
+- **core/engine ↛ disposable 콘텐츠** — 엔진·프로세스 컴포넌트는 샘플(`examples/`)을 의존 참조하지 않는다. 의존은 한 방향(샘플→프레임워크)이고 적을수록 좋다 — *통째로 빼도 프레임워크는 멀쩡해야 한다.* (경로-링크 형태는 ccc-plugin 검증기가 기계 강제; 산문 형태는 이 always-on 줄이 잡는다.)

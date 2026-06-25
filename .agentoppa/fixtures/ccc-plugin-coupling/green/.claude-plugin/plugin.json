@@ -1,0 +1,5 @@
+{
+  "name": "fx-coupling",
+  "version": "0.1.0",
+  "description": "self-harden coupling lint fixture (green — must pass)."
+}

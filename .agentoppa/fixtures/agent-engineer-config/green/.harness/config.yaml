@@ -1,0 +1,10 @@
+harness:  demo-flow
+feature:  demo
+sync:     medium
+routing:  balanced
+phases:
+  - spec
+  - tdd
+  - {name: review, sync: strict}
+values:
+  test_command: "npm test"
