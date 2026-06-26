@@ -1,0 +1,10 @@
+{
+  "name": "safe-feature",
+  "version": "0.1.0",
+  "description": "safe-feature 하네스 (AgentOppa 컴파일).",
+  "skills": "./skills/",
+  "hooks": "./hooks/hooks.json",
+  "interface": {
+    "displayName": "safe-feature"
+  }
+}

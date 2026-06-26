@@ -2,6 +2,8 @@
 // gate-review — strict 게이트가 강제하는 비손상 가드 (PreToolUse). [AgentOppa build-skills 가 생성]
 // 불변식: 하네스는 기존 src/·test/ 파일을 수정/삭제하지 않는다(추가만). 기존 파일을 Edit/Write로 덮으려 하면 deny.
 // 새 경로(test/<feature>.test.mjs 등) 추가는 허용. zero-dep(Node 빌트인) · 크로스OS · Claude/Codex 공용(루트 변수 흡수).
+//   주의: 스크립트 파일은 플러그인 hooks/ 에 있지만, 가드의 '프로젝트 루트' 는 CLAUDE_PROJECT_DIR(또는 cwd)로 잡는다
+//         — PLUGIN_ROOT(플러그인 위치)가 아니다. 둘을 섞으면 src/·test/ 판정이 어긋난다.
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -14,7 +16,8 @@ if (!/^(Edit|Write|MultiEdit|NotebookEdit)$/.test(tool)) process.exit(0);
 const path = input.tool_input?.file_path ?? input.tool_input?.path ?? "";
 if (!path) process.exit(0);
 
-const root = process.env.CLAUDE_PROJECT_DIR ?? process.env.PLUGIN_ROOT ?? process.cwd();
+// 프로젝트 루트: CLAUDE_PROJECT_DIR(Claude) → cwd(에이전트 실행 위치) 순. PLUGIN_ROOT 는 *쓰지 않는다*(플러그인 위치라 무관).
+const root = process.env.CLAUDE_PROJECT_DIR ?? process.cwd();
 const abs = resolve(root, path);
 const rel = abs.startsWith(resolve(root) + "/") ? abs.slice(resolve(root).length + 1) : path;
 

@@ -1,10 +1,13 @@
 {
-  "owner": { "name": "AgentOppa" },
+  "name": "safe-feature",
+  "owner": {
+    "name": "AgentOppa"
+  },
   "plugins": [
     {
       "name": "safe-feature",
-      "source": ".",
-      "description": "board-service 안전 기능추가 하네스 (spec→tdd→review)."
+      "source": "./plugins/safe-feature",
+      "description": "safe-feature 하네스 (AgentOppa 컴파일)."
     }
   ]
 }

@@ -68,7 +68,7 @@ codex --dangerously-bypass-approvals-and-sandbox
 
 # Concept
  - **AgentOppa = Maker.** 안 돌린다, 만든다 — Claude·Codex 양쪽에서 도는 하네스(에이전트 작업 골격)를 짓는 공장.
- - **산출물 = Core Layer + Project Layer + Config.** 유저가 손대는 `.harness/`(SOURCE) → `.claude/`·`.codex/`(COMPILED), 둘 다 git 커밋(생성물 독립).
+ - **산출물 = Core Layer + Project Layer + Config.** 유저가 손대는 `.harness/`(SOURCE) → `plugins/<harness>/`(COMPILED: 공유 컴포넌트 트리 + 두 매니페스트) + 루트 마켓, 둘 다 git 커밋(생성물 독립).
  - ▸ 전체 개념 모델 (Maker · Core/Project/Config · source→compiled): **[ARCHITECTURE.md](ARCHITECTURE.md)**
 
 # Skills

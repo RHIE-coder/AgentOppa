@@ -21,10 +21,15 @@
 │   ├── phases/<name>.md  ·  Project Layer: 이 프로젝트 phase   (→ 스킬로 컴파일)
 │   └── agents/<name>.md  ·  이 프로젝트 보조 에이전트          (→ 에이전트로 컴파일, .md→.toml)
 └── artifacts/<feature>/  ·  런타임 산출물 + lock.json
-.claude/ · .codex/        ← COMPILED (AgentOppa가 구움 · 도구가 로드 · git 커밋)
+
+plugins/<harness>/        ← COMPILED 플러그인 (컴포넌트 공유 한 트리 · git 커밋)
+├── skills/<phase>/        ·  컴파일된 스킬 (Claude 자동발견 · Codex는 매니페스트 포인터)
+├── agents/ · hooks/       ·  공유 컴포넌트 (.md + 빌드된 .toml 등)
+└── .claude-plugin/plugin.json · .codex-plugin/plugin.json   ·  두 매니페스트(메타·포인터)
+.claude-plugin/marketplace.json · .agents/plugins/marketplace.json  ← 루트 마켓(도구별 어댑터)
 ```
 
-- 유저는 `.harness/`만 손대고 → AgentOppa가 `.claude/`·`.codex/`로 **컴파일**.
+- 유저는 `.harness/`만 손대고 → AgentOppa가 `plugins/<harness>/`(공유 컴포넌트 트리 + 두 매니페스트) + 루트 마켓으로 **컴파일** — **AgentOppa 자신과 같은 플러그인 모델**(컴포넌트는 한 트리 공유, 도구별로 갈리는 건 매니페스트·마켓뿐. `.claude/`·`.codex/` 복제가 아니다).
 - 컴파일 결과는 경로·슬롯이 다 박혀서 **AgentOppa 없이도 돈다**(독립). 그래서 둘 다 커밋.
 
 > ⚠ **이름 주의:** "Maker 엔진"(AgentOppa의 *만드는 능력*) ≠ "Core Layer"(생성물 안의 *재사용 배관*). 둘 다 "core"라 부르면 꼬인다. (옛 README의 "Core Harness Layer / Project Harness Layer" 표현은 이 모델로 대체 예정.)
