@@ -161,6 +161,32 @@ const JUDGES = {
     });
     return judgeContract(docs);
   },
+
+  source_edits_preserved(work) {
+    // 컴파일러는 .harness SOURCE(저작물)를 건드리지 않는다 — 재생성 후에도 config·intent·phases 가 그대로(수기편집 보존).
+    const d = git(work, "diff", "--name-only", "--", ".harness/config.yaml", ".harness/intent.md", ".harness/project").stdout.trim();
+    return d
+      ? { ok: false, msg: `재생성이 SOURCE 저작물을 바꿈(수기편집 유실 위험):\n      ${d.split("\n").join("\n      ")}` }
+      : { ok: true, msg: "SOURCE 저작물(config·intent·phases) 무변 — 컴파일러가 안 건드림" };
+  },
+
+  intent_reflected(work) {
+    // config.yaml 의 phase 들이 컴파일된 스킬로 1:1 반영됐는가 (의도→산출 반영의 기계 근사).
+    const phases = readPhaseOrder(work);
+    if (!phases.length) return { ok: false, msg: "config.yaml 에 phases 없음" };
+    const pluginsDir = join(work, "plugins");
+    if (!existsSync(pluginsDir)) return { ok: false, msg: "plugins/ 없음 (compile 안 됨)" };
+    const skillDirs = new Set();
+    for (const h of readdirSync(pluginsDir).filter((d) => statSync(join(pluginsDir, d)).isDirectory())) {
+      const sdir = join(pluginsDir, h, "skills");
+      if (existsSync(sdir)) for (const s of readdirSync(sdir)) skillDirs.add(s);
+    }
+    const missing = phases.filter((p) => !skillDirs.has(p));
+    const extra = [...skillDirs].filter((s) => !phases.includes(s));
+    return (missing.length || extra.length)
+      ? { ok: false, msg: `config phase ↔ 컴파일 스킬 불일치 — 누락:[${missing}] 잉여:[${extra}]` }
+      : { ok: true, msg: `config phase ${phases.length}개 전부 스킬로 반영 (의도↔산출 일치)` };
+  },
 };
 
 // baseline(HEAD) 시점의 JSON 파일을 읽는다 (없으면 undefined). git show 로 — 워킹트리 변경과 무관.

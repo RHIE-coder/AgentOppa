@@ -65,3 +65,12 @@
 - **결론**: 생성된 *스킬·에이전트·훅 자체는 정상*(codex 가 발견함). 문제는 **ccc-plugin 이 만드는 Codex 패키징(marketplace 스키마 + 레이아웃)이 codex 0.140 기준 outdated** — "크로스툴 동일 품질"의 Codex 절반이 미증명을 넘어 *실제로 깨져 있었음*(이제 드러남·정확 규격 확정).
 - **수단/범위(후속 가드 — 미착수)**: ccc-plugin 의 `template.md` + `scripts/validate.mjs` 를 codex 0.140 실스키마로 갱신(manifest 스키마는 결정적 → 검사기로 기계화). + **컴파일 레이아웃은 설계 결정(유저 몫)**: 유저 하네스를 '프로젝트 루트 .codex' 모델로 둘지, 'marketplace plugins/<name>/' 모델로 바꿀지. 이번엔 oppa 시드 `marketplace.json` 만 실스키마로 교정(발견까지 확인), 레이아웃 재구성은 보류.
 - **기대**: ②③ 으로 첫 라이브의 치명 gap(컴파일러 부재)·즉흥(core 복사)이 결정적으로 닫힘. ④ 로 Codex 패키징 정확 규격이 확정 → ccc-plugin 갱신이 다음 가드.
+
+## 2026-06-26 · 라이브 sweep 후속: always-on 로드갭 봉합 · 멱등 버그 · loop/workers DEFER 해소
+
+- **무슨 일**: 라이브 QA sweep 이 3건을 드러냄·메움. ① **always-on 로드갭** — 배포 행동 가드(쉬운말·참조와 부재·질문엔 답)가 `--plugin-dir` 없이 뜬 세션엔 안 실려, 이 repo 작업 중에도 가드가 죽어 있었다(코드네임 'op1/xt1' 을 안 풀고 던진 실수의 실제 원인). ② **멱등 버그** — build-agents 가 .toml 헤더에 절대경로를 박아 저작≠컴파일 위치에서 스퓨리어스 diff → case3b·lc1 FAIL(9bb5247 에서 basename 으로 수정). ③ build-skills 가 loop·dynamic workers 를 DEFER(미구현)로 둠.
+- **일반화 / 수단**:
+  - ① 로드갭 = 이식성 결함(가드가 자리 따라 살았다 죽었다). → `CLAUDE.md` 가 `always-on.md` 를 import(dogfood 브리지): 이 repo 세션은 플러그인 로드 여부와 무관하게 행동 가드를 항상 받는다(Codex 는 `.agents` 마켓 자동감지로 이미 받음). 내부 브리지라 산출물=CLAUDE.md.
+  - ② 라인기반 생성기는 *위치 의존 절대경로*를 산출물에 박지 말 것 → basename. 멱등은 `compiled_idempotent` 판정이 기계로 받침.
+  - ③ "엔진 없음" 불변식과의 긴장은 *런타임 엔진*이 아니라 *컴파일된 self-gate 산문*으로 푼다 — loop/workers 를 SKILL.md 본문 지시로 emit(스킬 읽는 LLM 이 self-반복/선택).
+- **기대**: 가드가 자리 무관하게 살고(①), 하네스가 위치 옮겨도 멱등(②), loop/workers 하네스도 컴파일된다(③). 라이브 sweep 8 PASS + lc2 판정 2종 기계화(intent_reflected·source_edits_preserved). 남은 수동 = resume_equivalent(중단본 vs 무중단본 2-run 비교 필요).

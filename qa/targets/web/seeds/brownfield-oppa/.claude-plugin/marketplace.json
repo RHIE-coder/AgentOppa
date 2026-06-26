@@ -7,7 +7,7 @@
     {
       "name": "safe-feature",
       "source": "./plugins/safe-feature",
-      "description": "safe-feature 하네스 (AgentOppa 컴파일)."
+      "description": "board-service에 기능을 안전히 추가하는 하네스 (spec→tdd→review). 기존 node --test 재사용·비손상."
     }
   ]
 }

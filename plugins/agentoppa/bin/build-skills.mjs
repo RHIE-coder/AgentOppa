@@ -22,7 +22,9 @@
 // 안 하는 일 (의도적):
 //   - <root>/.claude/ · <root>/.codex/ 디렉터리 생성 금지 (per-tool 복제 안 함).
 //   - per-skill openai.yaml 금지, 스킬 트리 복제 금지.
-//   - loop self-gate 컴파일 / dynamic workers 런타임 선택 인코딩 → DEFER (아래 TODO·경고 참고).
+//   - 런타임 엔진 금지: loop·dynamic workers 는 *컴파일된 SKILL.md 본문에 self-gate 산문*으로 emit 한다
+//       (스킬 읽는 LLM 이 스스로 반복/선택 — 외부 오케스트레이터 없음). loop=do[] 마지막 phase 맨 위 self-gate,
+//       workers=첫 단락 뒤 선택 블록. (이전엔 둘 다 DEFER 였음.)
 //   - core/validate.mjs 는 .harness/core/ 그대로 SOURCE 로 emit (플러그인 트리로 옮기지 않음).
 //
 // zero-dep(Node 빌트인만) · 크로스OS(mac·linux·windows).
@@ -123,7 +125,8 @@ function parseConfig(text) {
           const base = l.search(/\S/); i++;
           while (i < lines.length && (lines[i].trim() === "" || lines[i].search(/\S/) > base)) {
             const dm = lines[i].match(/do:\s*\[([^\]]*)\]/); if (dm) loop.do = splitList(dm[1]);
-            const um = lines[i].match(/until:\s*["']?([^"'#]+?)["']?\s*(?:#.*)?$/); if (um) loop.until = um[1].trim();
+            // until 값은 안에 따옴표(예: '기준 충족')를 품을 수 있다 → clean()으로 주석·바깥따옴표만 떼고 보존.
+            const um = lines[i].match(/^\s*until:\s*(.+)$/); if (um) loop.until = clean(um[1]);
             const mm = lines[i].match(/max:\s*(\d+)/); if (mm) loop.max = +mm[1];
             i++;
           }
@@ -149,16 +152,38 @@ function parsePhase(name) {
   if (!existsSync(file)) return null;
   const raw = readFileSync(file, "utf8");
   const m = raw.match(/^---\s*\r?\n([\s\S]*?)\r?\n---\s*\r?\n?([\s\S]*)$/);
-  const fm = { name, consumes: [], produces: null, needs: [], hasWorkers: false };
+  const fm = { name, consumes: [], produces: null, needs: [], hasWorkers: false, workers: null };
   fm.body = m ? m[2].trim() : raw.trim();
   if (!m) { fm.malformed = true; return fm; }
   const fmText = m[1];
-  // frontmatter: 1-depth key: value. workers: 는 중첩 블록이라 존재만 표시.
+  // frontmatter: 1-depth key: value. workers: 는 중첩 블록 → select + options(pool) 까지 파싱.
   const flines = fmText.split(/\r?\n/);
   for (let i = 0; i < flines.length; i++) {
     const l = flines[i];
     let mm;
-    if (/^workers:\s*(#.*)?$/.test(l)) { fm.hasWorkers = true; continue; }
+    // workers: 중첩 블록. 다음 들여쓰기 줄들에서 select + options(<agent>: "<기준>") 를 모은다.
+    //   select(all|none|dynamic) 이 *무엇을* 호출할지, options 의 각 줄이 *언제* 그 보조를 띄울지(기준).
+    if (/^workers:\s*(#.*)?$/.test(l)) {
+      fm.hasWorkers = true;
+      fm.workers = { select: null, options: [] };
+      const base = l.search(/\S/);
+      let j = i + 1, inOptions = false;
+      while (j < flines.length) {
+        const wl = flines[j];
+        if (wl.trim() === "" || /^\s*#/.test(wl)) { j++; continue; }
+        if (wl.search(/\S/) <= base) break; // 들여쓰기 빠지면 workers 블록 끝.
+        const sm = wl.match(/^\s+select:\s*(.+)$/);
+        const om = wl.match(/^\s+options:\s*(#.*)?$/);
+        if (sm) { fm.workers.select = clean(sm[1]); inOptions = false; j++; continue; }
+        if (om) { inOptions = true; j++; continue; }
+        // options 하위 항목: '<agent-name>: "<언제 띄울지>"' (select 보다 더 들여쓰여 있음).
+        const opt = wl.match(/^\s+([A-Za-z0-9][\w-]*):\s*(.+)$/);
+        if (inOptions && opt) fm.workers.options.push({ name: opt[1], when: clean(opt[2]) });
+        j++;
+      }
+      i = j - 1; // 바깥 for 가 ++ 하므로 마지막 소비 줄에 맞춤.
+      continue;
+    }
     if ((mm = l.match(/^name:\s*(.+)$/))) fm.name = clean(mm[1]);
     else if ((mm = l.match(/^desc:\s*(.+)$/))) fm.desc = clean(mm[1]);
     else if ((mm = l.match(/^when:\s*(.+)$/))) { const x = clean(mm[1]); fm.when = (x === "~" || x === "") ? null : x; }
@@ -252,6 +277,57 @@ function insertStrictGateNote(body, gate) {
   return tail ? `${head}\n\n${note}\n\n${tail}` : `${head}\n\n${note}`;
 }
 
+// workers → 보조 에이전트 선택 블록. 본문에 *독립 단락*으로 emit (LLM 이 읽고 스스로 고름 — 런타임 엔진 없음).
+//   select=dynamic: pool 중 *관련된 것만* 골라 병렬 read-only 스폰 + 결과 합본. 기준 = options 의 각 '<언제>'.
+//   select=all: pool 전부 병렬 스폰. select=none: (블록 없음).
+//   producesPath: 합본 대상(= 산출물 경로) 또는 null(문서 산출 없음 → "결과를 다음 단계 입력으로 합본").
+//   삽입 위치: strict 게이트 노트처럼 첫 단락 뒤(독립 단락). 멱등 — 재컴파일해도 같은 텍스트.
+function insertWorkerBlock(body, workers, producesPath) {
+  if (!workers || !workers.options || !workers.options.length) return body;
+  const select = (workers.select || "dynamic").toLowerCase();
+  if (select === "none") return body; // 명시적으로 안 부름.
+  const pool = workers.options.map((o) => o.name).join(", ");
+  const mergeTarget = producesPath ? `\`${producesPath}\`` : "다음 단계 입력";
+  let note;
+  if (select === "all") {
+    // 정적 전체 호출.
+    const crit = workers.options.map((o) => `- ${o.name}: ${o.when.replace(/[.。]\s*$/, "")}.`).join("\n");
+    note =
+      `보조 에이전트 호출(정적 select: all): 다음을 *모두* 병렬 read-only 로 스폰한다 — ${pool}. ` +
+      `각자의 소관:\n${crit}\n결과를 ${mergeTarget}에 합본한다.`;
+  } else {
+    // dynamic(기본): 관련된 것만. 기준 문자열은 저자가 쓴 그대로(보통 '…때'로 끝남) + 마침표만.
+    const crit = workers.options.map((o) => `- ${o.name}: ${o.when.replace(/[.。]\s*$/, "")}.`).join("\n");
+    note =
+      `보조 에이전트 선택(select: dynamic): 아래 풀에서 *관련된 것만* 골라 병렬 read-only 로 스폰한다 — ${pool}. ` +
+      `관련성 기준(작업 트리/diff 신호로 판단):\n${crit}\n` +
+      `고른 보조들을 read-only 로 동시에 띄우고, 각 요약 결과를 ${mergeTarget}에 합본한다. (해당 신호가 없으면 그 보조는 건너뛴다.)`;
+  }
+  // strict 게이트 노트와 같은 삽입 규칙: 첫 단락 경계 뒤에 독립 단락으로.
+  const para = body.indexOf("\n\n");
+  const firstNl = body.indexOf("\n");
+  const cut = para !== -1 ? para : (firstNl !== -1 ? firstNl : body.length);
+  const head = body.slice(0, cut).replace(/\s+$/, "");
+  const tail = body.slice(cut).replace(/^\s+/, "");
+  return tail ? `${head}\n\n${note}\n\n${tail}` : `${head}\n\n${note}`;
+}
+
+// loop → self-gate. 본문 *맨 위*에 반복 자가 점검 산문 emit (when self-gate 와 동형 — 엔진 없음).
+//   do[] 의 *마지막* phase 본문에만 단다(한 바퀴를 끝낸 지점에서 until 을 본다).
+//   loopFirst: 미충족 시 되돌아갈 do[]의 첫 스킬. loopExit: 충족/max 시 빠져나갈 다음 단계.
+//   매 바퀴 do 묶음을 다시 돈다 — 카운트·판정은 스킬 읽는 에이전트가 self-gate 로 수행.
+function prependLoopGate(body, until, max, doNames, loopFirst, loopExit) {
+  const backTarget = loopFirst ? `/${loopFirst}` : "이 묶음의 처음";
+  const exitTarget = loopExit ? `→ /${loopExit}` : "흐름을 끝낸다";
+  const cycle = doNames.length ? doNames.join(" → ") : "이 묶음";
+  const cap = max ? `최대 ${max}회` : "충분히";
+  const gate =
+    `이 묶음(${cycle})을 **${until}** 충족까지 반복한다(${cap}). ` +
+    `한 바퀴를 마치면 조건을 본다: 미충족이고 횟수가 남았으면 ${backTarget}(으)로 되돌아가 다시 돈다. ` +
+    `충족했거나 ${max || "최대"}회에 도달하면 ${exitTarget}.\n\n`;
+  return gate + body;
+}
+
 // ---------- 디렉토리 ----------
 function ensureDir(d) { if (!existsSync(d)) mkdirSync(d, { recursive: true }); }
 function writeJSON(p, obj) { writeFileSync(p, JSON.stringify(obj, null, 2) + "\n"); }
@@ -286,13 +362,22 @@ const displayName = C.scalars.display_name || harness;
 
 info(`harness=${harness} · feature=${feature} · sync=${sync} · routing=${C.scalars.routing || "(기본)"}`);
 
-// phases 펼침 (loop 안 항목도 시퀀스로; loop 자체의 self-gate 는 DEFER).
+// phases 펼침 (loop 안 항목도 시퀀스로; loop 의 self-gate 는 do[] 마지막 phase 본문에 emit).
+//   각 loop 항목에 loop 메타를 단다: first(되돌아갈 곳)·last(여기서 until 판정)·until·max·doNames.
 const seq = [];
 let sawLoop = false;
 for (const p of C.phases) {
   if (p.type === "loop") {
     sawLoop = true;
-    for (const n of p.do) seq.push({ name: n, syncOverride: null, inLoop: true });
+    const doNames = p.do.slice();
+    const loopFirst = doNames[0] || null;
+    for (let k = 0; k < doNames.length; k++) {
+      seq.push({
+        name: doNames[k], syncOverride: null, inLoop: true,
+        loopFirst, loopUntil: p.until, loopMax: p.max, loopDoNames: doNames,
+        loopLast: k === doNames.length - 1, // do[]의 마지막 → 여기서 until self-gate.
+      });
+    }
   } else if (p.name) {
     seq.push({ name: p.name, syncOverride: p.sync || null, inLoop: false });
   }
@@ -300,6 +385,7 @@ for (const p of C.phases) {
 if (!seq.length) { bad("phases 비어 있음 — 컴파일할 게 없음"); process.exit(1); }
 
 // next 매핑 (시퀀스상 다음 — phase 는 자기 다음을 모른다, recipe 가 채운다).
+//   loop 의 마지막 phase 는 next 가 'loop 탈출구'(= 묶음 다음)이기도 하다. self-gate 가 이를 exit 으로 쓴다.
 for (let i = 0; i < seq.length; i++) seq[i].next = seq[i + 1] ? seq[i + 1].name : null;
 
 // ---------- 플러그인 트리 경로 (AgentOppa 자신과 동형) ----------
@@ -356,8 +442,25 @@ for (const item of seq) {
   if (card.produces) body = enrichHeader(body, item.name, consumesRoles);
   // (d) when → self-gate (본문 맨 위).
   if (card.when) body = prependSelfGate(body, card.when, item.next);
-  // (e) strict 게이트 안내 (첫 문장 뒤).
+  // (e) workers → 보조 에이전트 선택/호출 블록 (첫 단락 뒤, 독립 단락). select=none 이면 no-op.
+  //     합본 대상은 {produces} 경로(있으면) — 없으면 다음 단계 입력으로 합본.
+  //     strict 노트보다 *먼저* 삽입 → 둘 다 첫 단락 뒤를 노려서, 나중 삽입이 위로 간다.
+  //     순서 결과: line1 → strict 게이트 노트 → workers 블록 → 본문 (게이트 프레이밍이 먼저 읽히게).
+  if (card.workers && card.workers.options.length) {
+    const producesPath = card.produces ? artifactPath(feature, card.produces) : null;
+    const before = body;
+    body = insertWorkerBlock(body, card.workers, producesPath);
+    const sel = (card.workers.select || "dynamic").toLowerCase();
+    if (body !== before) ok(`workers(${sel}) 선택 블록 emit: ${card.workers.options.map((o) => o.name).join(", ")}`);
+    else if (sel === "none") info(`workers select: none — 선택 블록 생략 (명시적 비호출)`);
+  }
+  // (e2) strict 게이트 안내 (첫 문장 뒤 — workers 블록보다 위로).
   if (effectiveSync(item) === "strict" && card.gate) body = insertStrictGateNote(body, card.gate);
+  // (e3) loop → self-gate (본문 맨 위). do[]의 *마지막* phase 에만(거기서 until 판정).
+  if (item.loopLast) {
+    body = prependLoopGate(body, item.loopUntil, item.loopMax, item.loopDoNames, item.loopFirst, item.next);
+    ok(`loop self-gate emit: '${item.loopDoNames.join(" → ")}' until "${item.loopUntil}" (max ${item.loopMax ?? "?"})`);
+  }
   // (f) {next} → /next | (종착).  ← 맨 마지막(다른 치환이 {next} 를 건드리지 않게).
   body = substituteNext(body, item.next);
 
@@ -369,9 +472,6 @@ for (const item of seq) {
   // description: desc (없으면 경고 + 플레이스홀더).
   const desc = card.desc || `(desc 없음 — phase '${item.name}')`;
   if (!card.desc) warn(`'${item.name}' desc 없음 → description 비게 됨 (phase frontmatter 에 desc: 추가 권장)`);
-
-  // workers 가 있으면: 본문에 선택 로직이 산문으로 있어야 한다(저자가 씀). 컴파일러는 인코딩하지 않음 → DEFER.
-  if (card.hasWorkers) defer(`'${item.name}' workers(dynamic) 런타임 선택 — 본문 산문에 의존(컴파일러가 인코딩 안 함). 보조 에이전트 .md 는 project/agents/ → plugins/${harness}/agents/ 로 변환됨.`);
 
   const skillMd = `---\nname: ${item.name}\ndescription: ${desc}\n---\n${body}\n`;
 
@@ -530,10 +630,8 @@ if (existsSync(canonicalValidate)) {
   bad(`정본 validate.mjs 없음: ${canonicalValidate} — core/validate.mjs 미생성`);
 }
 
-// ===== DEFER: loop self-gate =====
-if (sawLoop) {
-  defer(`loop self-gate 컴파일 — loop.until 조건을 스킬 본문에 self-gate 로 박는 것은 '엔진 없음' 불변식과 긴장. 이번엔 미구현. loop 안 phase 는 개별 스킬로만 emit 됨(반복 제어는 LLM/호출자 몫). TODO: until 을 do[]의 마지막 스킬 본문에 '조건 충족까지 반복' self-gate 로 인코딩하는 설계 확정 필요.`);
-}
+// loop: do[]의 마지막 phase 본문에 self-gate 산문으로 emit 됨(위 e3) — 반복·카운트는 스킬 읽는 에이전트가 수행(엔진 없음).
+if (sawLoop) info(`loop self-gate: do[] 마지막 phase 본문 맨 위에 '조건 충족까지 반복' 산문으로 컴파일됨 (반복 제어는 LLM self-gate — 엔진 없음).`);
 
 // ===== 마무리 =====
 console.log(`\n${c.d}─── packaging (AgentOppa 모델: 공유 한 트리 + 두 매니페스트 포인터) ───${c.x}`);
