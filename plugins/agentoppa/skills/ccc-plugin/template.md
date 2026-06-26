@@ -71,7 +71,8 @@
 }
 ```
 
-> `source.source`는 `local` 또는 `git-subdir`(`url`/`path`/`ref`). `policy.installation`: `AVAILABLE`·`INSTALLED_BY_DEFAULT`·`NOT_AVAILABLE`.
+> `source.source`는 `local` 또는 `git-subdir`(`url`/`path`/`ref`). `policy.installation`: `AVAILABLE`·`INSTALLED_BY_DEFAULT`·`NOT_AVAILABLE`. `authentication`은 생략하거나 `ON_INSTALL`·`ON_USE`.
+> ⚠ §3 Claude 마켓의 `owner{}` 를 여기 쓰지 말 것 — codex 는 `name`+`interface`. `source.path` 는 `./plugins/<name>/` 서브디렉터리(루트 `"."` 는 codex 가 "No plugins found"). (validator 가 강제.)
 
 ## 경로 변수 (스크립트/훅)
 

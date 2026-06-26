@@ -21,6 +21,14 @@ const CASES = [
     green: ".agentoppa/fixtures/ccc-plugin-coupling/green",
   },
   {
+    // 라이브 e2e 발견 버그 가드: codex 0.140 마켓 스키마. Claude식 owner(name 누락)·
+    // 무효 policy enum("explicit"/"none")을 codex 가 거부 → validator 가 기계로 잡는다.
+    name: "ccc-plugin/codex-schema — codex 마켓 name(owner아님)·policy enum 점검",
+    validator: "plugins/agentoppa/skills/ccc-plugin/scripts/validate.mjs",
+    red: ".agentoppa/fixtures/ccc-plugin-codex-schema/red",
+    green: ".agentoppa/fixtures/ccc-plugin-codex-schema/green",
+  },
+  {
     name: "agent-engineer/config — phase 연결(dangling) 점검",
     validator: "plugins/agentoppa/skills/agent-engineer/scripts/validate.mjs",
     red: ".agentoppa/fixtures/agent-engineer-config/red/.harness/config.yaml",

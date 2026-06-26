@@ -90,10 +90,20 @@ if (existsSync(xMkt)) {
   const m = readJSON(xMkt);
   if (m) {
     ok("codex marketplace.json 존재 (.agents/plugins/)");
+    // codex 0.140 스키마 강제 — Claude 마켓은 owner{}, codex 마켓은 name+interface (섞으면 codex 가 거부).
+    if (!m.name) err(`codex marketplace: 최상위 'name' 없음 — codex 0.140 은 'owner' 가 아니라 'name'+interface 를 쓴다 (Claude 스키마 누수?)`);
+    else ok(`codex marketplace name '${m.name}'`);
+    if (m.owner) warn(`codex marketplace: Claude 식 'owner' 키 있음 — codex 는 무시(name/interface 를 봄)`);
+    if (!m.interface?.displayName) warn(`codex marketplace: interface.displayName 권장(codex 표시명)`);
+    const INSTALL = new Set(["AVAILABLE", "NOT_AVAILABLE", "INSTALLED_BY_DEFAULT"]);
+    const AUTH = new Set(["ON_INSTALL", "ON_USE"]);
     for (const p of m.plugins ?? []) {
       const sp = p.source?.path;
       if (sp && !existsSync(resolve(root, sp))) warn(`codex marketplace: source.path 없음 ${sp}`);
-      if (!p.policy) warn(`codex marketplace: '${p.name}' policy 없음`);
+      if (sp === ".") warn(`codex marketplace '${p.name}': source.path '.' — codex 는 plugins/<name>/ 서브디렉터리를 기대(루트는 'No plugins found')`);
+      if (!p.policy) { warn(`codex marketplace: '${p.name}' policy 없음`); continue; }
+      if (!INSTALL.has(p.policy.installation)) err(`codex marketplace '${p.name}': policy.installation '${p.policy.installation}' 무효 — ${[...INSTALL].join("·")} 중 하나 (codex 0.140)`);
+      if ("authentication" in p.policy && !AUTH.has(p.policy.authentication)) err(`codex marketplace '${p.name}': policy.authentication '${p.policy.authentication}' 무효 — 생략 또는 ${[...AUTH].join("·")} (codex 0.140)`);
     }
   }
 } else warn("codex marketplace.json 없음 (.agents/plugins/)");

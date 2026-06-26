@@ -1,0 +1,11 @@
+{
+  "owner": { "name": "Demo" },
+  "plugins": [
+    {
+      "name": "demo",
+      "source": { "source": "local", "path": "." },
+      "description": "board-service 안전 기능추가 하네스",
+      "policy": { "installation": "explicit", "authentication": "none" }
+    }
+  ]
+}

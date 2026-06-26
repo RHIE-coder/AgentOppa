@@ -1,5 +1,6 @@
 {
   "name": "agentoppa",
+  "interface": { "displayName": "AgentOppa" },
   "plugins": [
     {
       "name": "agentoppa",

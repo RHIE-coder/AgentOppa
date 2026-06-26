@@ -1,0 +1,12 @@
+{
+  "name": "demo",
+  "interface": { "displayName": "Demo" },
+  "plugins": [
+    {
+      "name": "demo",
+      "source": { "source": "local", "path": "./plugins/demo" },
+      "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" },
+      "category": "Productivity"
+    }
+  ]
+}

@@ -44,8 +44,10 @@
 - 위치: repo `$ROOT/.agents/plugins/marketplace.json`, 개인 `~/.agents/plugins/marketplace.json`, **legacy** `$ROOT/.claude-plugin/marketplace.json`(Codex가 폴백으로 읽음).
 - 구조: `name`, `interface{displayName}`, `plugins[]`.
 - `plugins[]` 항목: `name`, `source{source:"local"|"git-subdir", path | url/ref}`, `policy{installation, authentication}`, `category`.
-- `policy.installation`: `AVAILABLE` · `INSTALLED_BY_DEFAULT` · `NOT_AVAILABLE`. `authentication`: `ON_INSTALL`(또는 최초 사용 시).
+- `policy.installation`: `AVAILABLE` · `INSTALLED_BY_DEFAULT` · `NOT_AVAILABLE`. `authentication`: 생략하거나 `ON_INSTALL` · `ON_USE`.
 - CLI: `codex plugin marketplace add owner/repo [--ref <r>] [--sparse <path>]` · `list` · `upgrade` · `remove`.
+
+> ⚠ **흔한 실수(라이브 e2e 에서 실제 발생):** Claude 마켓의 `owner{}` 를 codex 마켓에 베끼지 말 것 — codex 는 `name`+`interface` 를 쓰고 `policy` enum 도 위 값만 받는다(`"explicit"`/`"none"` 등은 거부). `source.path` 는 `"."`(루트) 아니라 **`./plugins/<name>/` 서브디렉터리**여야 codex 가 발견한다(루트는 "No plugins found"). validator(`scripts/validate.mjs`)가 enum·name·layout 을 기계 강제.
 
 ## 출처
 
