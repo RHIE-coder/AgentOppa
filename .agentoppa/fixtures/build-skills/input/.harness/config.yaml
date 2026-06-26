@@ -1,0 +1,10 @@
+harness: demo
+feature: thing
+sync: medium
+routing: balanced
+phases:
+  - spec
+  - impl
+  - test
+values:
+  test_command: "npm test"
