@@ -61,14 +61,14 @@ function parsePhases(lines, i, cfg) {
       const inline = v.match(/\{(.+)\}/);
       if (inline) {
         const dm = inline[1].match(/do:\s*\[([^\]]*)\]/); if (dm) loop.do = splitList(dm[1]);
-        const um = inline[1].match(/until:\s*["']?([^,"'}]+)["']?/); if (um) loop.until = um[1].trim();
+        const um = inline[1].match(/until:\s*"([^"]*)"|until:\s*'([^']*)'|until:\s*([^,}]+)/); if (um) loop.until = (um[1] ?? um[2] ?? um[3]).trim();
         const mm = inline[1].match(/max:\s*(\d+)/); if (mm) loop.max = +mm[1];
         i++;
       } else {
         const base = l.search(/\S/); i++;
         while (i < lines.length && (lines[i].trim() === "" || lines[i].search(/\S/) > base)) {
           const dm = lines[i].match(/do:\s*\[([^\]]*)\]/); if (dm) loop.do = splitList(dm[1]);
-          const um = lines[i].match(/until:\s*["']?([^"'#]+?)["']?\s*(?:#.*)?$/); if (um) loop.until = um[1].trim();
+          const um = lines[i].match(/^\s*until:\s*(.+)$/); if (um) loop.until = clean(um[1]);
           const mm = lines[i].match(/max:\s*(\d+)/); if (mm) loop.max = +mm[1];
           i++;
         }

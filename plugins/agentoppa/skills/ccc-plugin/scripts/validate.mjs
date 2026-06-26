@@ -100,7 +100,7 @@ if (existsSync(xMkt)) {
     for (const p of m.plugins ?? []) {
       const sp = p.source?.path;
       if (sp && !existsSync(resolve(root, sp))) warn(`codex marketplace: source.path 없음 ${sp}`);
-      if (sp === ".") warn(`codex marketplace '${p.name}': source.path '.' — codex 는 plugins/<name>/ 서브디렉터리를 기대(루트는 'No plugins found')`);
+      if (sp === ".") err(`codex marketplace '${p.name}': source.path '.' — codex 는 plugins/<name>/ 서브디렉터리를 기대(루트는 'No plugins found'). ./plugins/<name> 로.`);
       if (!p.policy) { warn(`codex marketplace: '${p.name}' policy 없음`); continue; }
       if (!INSTALL.has(p.policy.installation)) err(`codex marketplace '${p.name}': policy.installation '${p.policy.installation}' 무효 — ${[...INSTALL].join("·")} 중 하나 (codex 0.140)`);
       if ("authentication" in p.policy && !AUTH.has(p.policy.authentication)) err(`codex marketplace '${p.name}': policy.authentication '${p.policy.authentication}' 무효 — 생략 또는 ${[...AUTH].join("·")} (codex 0.140)`);
