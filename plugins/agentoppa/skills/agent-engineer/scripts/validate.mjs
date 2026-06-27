@@ -4,7 +4,7 @@
 // 종료코드: 오류 0건이면 0, 있으면 1, config 없으면 2.
 // 셸·외부 의존 없음(Node 빌트인만) → mac·linux·windows 동일.
 import { readFileSync, existsSync, readdirSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { createHash } from "node:crypto";
 
 const c = { r: "\x1b[31m", y: "\x1b[33m", g: "\x1b[32m", d: "\x1b[2m", x: "\x1b[0m" };
@@ -23,28 +23,32 @@ const harnessDir = dirname(cfgPath);
 const raw = readFileSync(cfgPath, "utf8");
 
 // ---------- config.yaml 파서 (라인 기반, 이 양식 전용) ----------
+// (build-skills.mjs 의 parseConfig 와 동치 — bindings/impl 블록 파싱을 둘 다에 똑같이 둔다.)
 function parseConfig(text) {
   const lines = text.split(/\r?\n/);
-  const cfg = { scalars: {}, values: {}, phases: [] };
+  const cfg = { scalars: {}, values: {}, bindings: {}, impl: {}, phases: [] };
   let i = 0;
   while (i < lines.length) {
     const l = lines[i];
     if (l.trim() === "" || /^\s*#/.test(l)) { i++; continue; }
     if (/^phases:\s*(#.*)?$/.test(l)) { i = parsePhases(lines, i + 1, cfg); continue; }
-    if (/^values:\s*(#.*)?$/.test(l)) { i = parseValues(lines, i + 1, cfg); continue; }
+    if (/^values:\s*(#.*)?$/.test(l)) { i = parseBlock(lines, i + 1, cfg.values); continue; }
+    if (/^bindings:\s*(#.*)?$/.test(l)) { i = parseBlock(lines, i + 1, cfg.bindings); continue; }
+    if (/^impl:\s*(#.*)?$/.test(l)) { i = parseBlock(lines, i + 1, cfg.impl); continue; }
     const m = l.match(/^([A-Za-z_][\w-]*):\s*(.*)$/);
     if (m && m[2].trim() !== "") cfg.scalars[m[1]] = clean(m[2]);
     i++;
   }
   return cfg;
 }
-function parseValues(lines, i, cfg) {
+// 1-depth 평평한 블록(`키: 값` 한 줄들)을 target 맵에 채운다. values·bindings·impl 공용.
+function parseBlock(lines, i, target) {
   while (i < lines.length) {
     const l = lines[i];
     if (l.trim() === "" || /^\s*#/.test(l)) { i++; continue; }
     if (!/^\s+/.test(l)) break;
     const m = l.match(/^\s+([A-Za-z_][\w-]*):\s*(.*)$/);
-    if (m) cfg.values[m[1]] = clean(m[2]);
+    if (m) target[m[1]] = clean(m[2]);
     i++;
   }
   return i;
@@ -88,17 +92,59 @@ function parsePhases(lines, i, cfg) {
 }
 
 // ---------- phase 파일 frontmatter 파서 ----------
+// requires 항목 한 개를 {key, optional, kind} 로 푼다. `:capability` 접미사 = 능력-빈자리, 없으면 값-빈자리.
+// (`needs:` 는 값-빈자리의 옛 이름 — 파서에서 같은 풀로 흡수한다.)
+function parseRequire(token) {
+  const optional = /\?$/.test(token);
+  let key = token.replace(/\?$/, "");
+  let kind = "value";
+  if (/:capability$/.test(key)) { kind = "capability"; key = key.replace(/:capability$/, ""); }
+  return { key, optional, kind };
+}
+// phase 소스 위치 해석 (`core:` 적재 배선 — build-skills.mjs 의 phaseSourceFile 과 *동치*여야 한다).
+//   - `core:` 없으면(단독 하네스): .harness/project/phases/<name>.md 만.
+//   - `core: <name>` 있으면(재사용 모드): 1) project/phases/<name>.md(있으면 오버라이드 우선) →
+//       2) <root 에서 위로 탐색>/.agentoppa/plugins/<core>/phases/<name>.md(Core 묶음이 든 phase 소스).
+//   root = dirname(harnessDir) (build-skills 의 ROOT 와 동치 — harnessDir=<root>/.harness).
+//   위로 탐색하는 이유: 한 Core 묶음을 여러 프로젝트가 공유(가리켜 재사용)하면 공통 상위에 한 벌 → 단일소스.
+function kebab(s) { return String(s).trim().toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, ""); }
+function findCorePhasesDir(startDir, core) {
+  let dir = resolve(startDir);
+  for (;;) {
+    const cand = join(dir, ".agentoppa", "plugins", core, "phases");
+    if (existsSync(cand)) return cand;
+    const up = dirname(dir);
+    if (up === dir) return null;
+    dir = up;
+  }
+}
+function phaseSourceFile(name) {
+  const local = join(harnessDir, "project", "phases", `${name}.md`);
+  if (existsSync(local)) return local;
+  const core = C && C.scalars && C.scalars.core ? kebab(C.scalars.core) : null;
+  if (core) {
+    const dir = findCorePhasesDir(join(harnessDir, ".."), core); // <root> 에서 위로.
+    if (dir) {
+      const fromCore = join(dir, `${name}.md`);
+      if (existsSync(fromCore)) return fromCore;
+    }
+  }
+  return null;
+}
 function parsePhase(name) {
-  const file = join(harnessDir, "project", "phases", `${name}.md`);
-  if (!existsSync(file)) return null;
+  const file = phaseSourceFile(name);
+  if (!file) return null;
   const fm = readFileSync(file, "utf8").match(/^---\s*\r?\n([\s\S]*?)\r?\n---/);
-  const card = { name, consumes: [], produces: null, needs: [], hasWorkers: false };
+  const card = { name, consumes: [], produces: null, requires: [], hasWorkers: false };
   if (!fm) return card;
   for (const l of fm[1].split(/\r?\n/)) {
     let m;
     if ((m = l.match(/^produces:\s*(.+)$/))) { const x = clean(m[1]); card.produces = (x === "~" || x === "") ? null : x; }
-    else if ((m = l.match(/^consumes:\s*(.+)$/))) card.consumes = splitList(m[1]).map((r) => ({ role: r.replace(/\?$/, ""), optional: /\?$/.test(r) }));
-    else if ((m = l.match(/^needs:\s*(.+)$/))) card.needs = splitList(m[1]).map((r) => ({ key: r.replace(/\?$/, ""), optional: /\?$/.test(r) }));
+    // consumes: ~ (YAML null = 아무것도 안 받음) · 빈값 → 빈 리스트. produces 가드와 대칭(안 그러면 팬텀 역할 '~' 생김).
+    else if ((m = l.match(/^consumes:\s*(.+)$/))) { const x = clean(m[1]); card.consumes = (x === "~" || x === "") ? [] : splitList(m[1]).map((r) => ({ role: r.replace(/\?$/, ""), optional: /\?$/.test(r) })); }
+    // requires 와 needs(옛 이름) 둘 다 requires 풀로 모은다. needs 항목은 항상 값-빈자리(kind:"value").
+    else if ((m = l.match(/^requires:\s*(.+)$/))) card.requires.push(...splitList(m[1]).map(parseRequire));
+    else if ((m = l.match(/^needs:\s*(.+)$/))) card.requires.push(...splitList(m[1]).map((r) => ({ ...parseRequire(r), kind: "value" })));
     else if (/^workers:\s*$/.test(l)) card.hasWorkers = true;
   }
   return card;
@@ -131,12 +177,12 @@ const cards = {};
 for (const name of seq) {
   if (cards[name]) continue;
   const card = parsePhase(name);
-  if (!card) warn(`phase '${name}' 정의 없음: project/phases/${name}.md (즉석 저작?)`);
+  if (!card) warn(`phase '${name}' 정의 없음: project/phases/${name}.md (project/phases 미정의?)`);
   else cards[name] = card;
 }
 
 // --- 연결 점검 (contract §4) ---
-const produced = new Set(), producedBy = {}, consumed = new Set();
+const produced = new Set(), producedBy = {}, consumed = new Set(), boundCaps = new Set();
 for (const name of seq) {
   const card = cards[name];
   if (!card) continue;
@@ -148,12 +194,46 @@ for (const name of seq) {
     if (produced.has(card.produces)) err(`중복 produces: '${card.produces}' (${producedBy[card.produces]} & ${name})`);
     produced.add(card.produces); producedBy[card.produces] = name;
   }
-  for (const nd of card.needs) {
-    if (!nd.optional && !(nd.key in C.values)) err(`'${name}'의 needs '${nd.key}'가 config.values에 없음`);
+  // requires 점검 — 값-빈자리는 config.values, 능력-빈자리는 config.bindings(+impl) 가 채워야 한다.
+  //   (needs 흡수분 포함. 선택(?) 빈자리는 미충족이어도 통과 — 본문이 '있으면 쓴다'.)
+  for (const rq of card.requires) {
+    if (rq.optional) continue;
+    if (rq.kind === "value") {
+      if (!(rq.key in C.values)) err(`'${name}'의 값-빈자리 '${rq.key}'가 config.values 에 없음`);
+    } else { // capability
+      if (!(rq.key in C.bindings)) {
+        err(`'${name}'의 능력-빈자리 '${rq.key}'가 config.bindings 에 없음 (미바인딩)`);
+      } else {
+        const impl = C.bindings[rq.key];
+        const looksLikeKey = /^[A-Za-z0-9][\w-]*$/.test(impl); // 'playwright' 처럼 단일 토큰 = impl 키 추정.
+        if (looksLikeKey && !(impl in C.impl) && !(impl in C.values))
+          err(`'${name}'의 능력 '${rq.key}' → '${impl}' 구현 정의 없음 (config.impl 에 '${impl}' 없음)`);
+        // 우변이 명령("npx ...")·경로("./project/impl/..")면 인라인으로 보고 통과.
+      }
+    }
+    boundCaps.add(rq.key);
   }
 }
 for (const role of produced) if (!consumed.has(role)) warn(`orphan 산출물: '${role}' (${producedBy[role]}) — 아무도 소비 안 함 (종착이면 무시)`);
-if (errors === 0) ok("연결 OK (dangling·중복·needs 없음)");
+// orphan 바인딩: config.bindings 에 있는데 어느 phase 의 requires 도 안 가리키는 능력 (종착 orphan 과 동급 — warn).
+for (const cap of Object.keys(C.bindings)) if (!boundCaps.has(cap)) warn(`orphan 바인딩: '${cap}' — 어느 phase 의 requires 도 안 가리킴`);
+
+// impl 모듈 frontmatter `provides:` 일치 점검 (엉뚱한 모듈 연결 방지).
+//   바인딩이 .md 모듈 경로로 풀리면 그 파일의 provides: 를 능력명과 대조 → 불일치면 warn.
+//   파일 미존재는 적재 전일 수 있어 error 아님(부재 단정 금지 가드와 정합) — 그냥 건너뛴다.
+for (const cap of boundCaps) {
+  if (!(cap in C.bindings)) continue;
+  const rhs = C.bindings[cap];
+  // 모듈 경로 결정: 우변이 경로면 그것, 단일 토큰이면 impl[토큰] 이 경로일 때.
+  const path = /[./]/.test(rhs) ? rhs : (C.impl[rhs] || null);
+  if (!path || !/\.md$/.test(path)) continue; // 인라인 명령·.mjs 실행기는 provides 점검 대상 아님.
+  const abs = join(harnessDir, path);
+  if (!existsSync(abs)) continue; // 부재 단정 금지 — 적재 전일 수 있음.
+  const pm = readFileSync(abs, "utf8").match(/^---\s*\r?\n([\s\S]*?)\r?\n---/);
+  const prov = pm && (pm[1].split(/\r?\n/).map((l) => l.match(/^provides:\s*(.+)$/)).find(Boolean) || [])[1];
+  if (prov && clean(prov) !== cap) warn(`impl 모듈 '${path}' 의 provides: '${clean(prov)}' 가 능력 '${cap}' 와 불일치`);
+}
+if (errors === 0) ok("연결 OK (dangling·중복·requires 빈자리 없음)");
 
 // --- 신선도 (산출물 있을 때만, contract §3) ---
 const feat = C.scalars.feature;

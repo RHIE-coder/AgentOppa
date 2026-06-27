@@ -1,31 +1,37 @@
 #!/usr/bin/env node
-// build-skills — AgentOppa phase→스킬 COMPILER. .harness/ (SOURCE) 를 읽어 *플러그인 한 트리* (COMPILED) 를 결정적으로 생성한다.
-//   왜: .harness → 배포 가능한 플러그인 컴파일 전 과정이 LLM 수작업이었다. 이 스크립트가 그 다리를 기계화한다.
-//   모델: AgentOppa 자신(plugins/agentoppa/)의 검증된 구조 그대로 — **공유 컴포넌트 한 트리 + 두 매니페스트의 포인터**.
-//         .claude/skills·.codex/skills 복제 없음. per-skill openai.yaml 없음. (지난 라이브의 과잉을 걷어냄.)
+// build-skills — Project(.harness/)를 읽어 재사용 Core 묶음(.agentoppa/)을 결정적으로 산출한다.
+//   왜: .harness → 적재 가능한 Core 묶음으로 만드는 과정이 LLM 수작업이었다. 이 스크립트가 그 다리를 기계화한다.
+//   모델(P0 잠금): AgentOppa = Maker(아무것도 안 싣는다). 유저가 자기 Project(.harness/)에서 재사용 Core(.agentoppa/)를
+//         빌드한다. Core = AgentOppa 자신과 동형의 자체완결 묶음(.claude-plugin + .agents + plugins/<core>/) →
+//         github·복붙으로 이식, 여러 프로젝트가 *가리켜* 쓴다. 프로젝트 값을 본문에 안 박는 게 재사용의 비결:
+//         값-빈자리는 컴파일 때 박고, 능력-빈자리({cap:})는 런타임에 .harness/config.yaml 에서 읽는다.
 //   계약 출처: agent-engineer/references/{contract,phases,recipe}.md, 포맷 출처: ccc-skills·ccc-agents·ccc-hooks·ccc-plugin.
 //             어긋나면 그 SKILL.md/references 가 정답.
 //
 // 사용법: node build-skills.mjs <project-root>
-//   <project-root>/.harness/ 를 읽어 <project-root> 에 플러그인 한 트리(plugins/<harness>/) + 루트 마켓 2개를 채운다.
+//   <project-root>/.harness/ 를 읽어 <project-root>/.agentoppa/ 에 Core 묶음 한 벌 + 그 안 마켓 2개를 채운다.
 //   (project-root 인자만 받는다 — 이 스크립트는 엔진(plugins) 안이라 특정 콘텐츠 트리를 하드코딩하지 않는다. 한방향.)
 //
-// 생성 레이아웃 (AgentOppa 자신과 동형):
-//   <root>/.claude-plugin/marketplace.json              # Claude 마켓 (owner 스키마), source "./plugins/<harness>"
-//   <root>/.agents/plugins/marketplace.json             # Codex 마켓 (name/interface/policy AVAILABLE), source.path "./plugins/<harness>"
-//   <root>/plugins/<harness>/.claude-plugin/plugin.json # 메타만 (Claude 자동발견)
-//   <root>/plugins/<harness>/.codex-plugin/plugin.json  # 메타 + 존재하는 컴포넌트 포인터 (skills·hooks)
-//   <root>/plugins/<harness>/skills/<phase>/SKILL.md    # 공유 한 트리 (슬롯 치환). openai.yaml 금지.
-//   <root>/plugins/<harness>/agents/<name>.md (+.toml)  # Claude 에이전트(.md) + build-agents.mjs 가 Codex .toml 동반 생성.
-//   <root>/plugins/<harness>/hooks/hooks.json (+ .mjs)  # 공유 (strict 게이트 필요 시). Codex 는 plugin.json 포인터로 가리킴.
+// 생성 레이아웃 (.agentoppa/ 자체완결 묶음 — AgentOppa 자신과 동형):
+//   <root>/.agentoppa/.claude-plugin/marketplace.json              # Claude 마켓 (owner 스키마), source "./plugins/<core>"
+//   <root>/.agentoppa/.agents/plugins/marketplace.json             # Codex 마켓 (name/interface/policy AVAILABLE), source.path "./plugins/<core>"
+//   <root>/.agentoppa/plugins/<core>/.claude-plugin/plugin.json    # 메타만 (Claude 자동발견)
+//   <root>/.agentoppa/plugins/<core>/.codex-plugin/plugin.json     # 메타 + 존재하는 컴포넌트 포인터 (skills·hooks)
+//   <root>/.agentoppa/plugins/<core>/skills/<phase>/SKILL.md       # 워크플로우(=Core 콘텐츠). 슬롯 치환. openai.yaml 금지.
+//   <root>/.agentoppa/plugins/<core>/agents/<name>.md (+.toml)     # Claude 에이전트(.md) + build-agents.mjs 가 Codex .toml 동반 생성.
+//   <root>/.agentoppa/plugins/<core>/hooks/hooks.json (+ .mjs)     # 공유 (strict 게이트 필요 시). Codex 는 plugin.json 포인터로 가리킴.
+//   <root>/.agentoppa/plugins/<core>/always-on.md                  # Core 행동 규칙 (fallback import 대상).
+//   <root>/.agentoppa/README.md                                    # 연동 명령(적재 메뉴) + 폴더 목적 + 배포 옵션.
+//   <root>/CLAUDE.md · <root>/AGENTS.md                            # Core 규칙 import 줄 (append-only · 멱등 — 플러그인 없이도 행동 가드 생존).
 //
 // 안 하는 일 (의도적):
-//   - <root>/.claude/ · <root>/.codex/ 디렉터리 생성 금지 (per-tool 복제 안 함).
+//   - <root>/.claude/ · <root>/.codex/ 디렉터리 생성 금지 — 그 포인터는 적재 메뉴(--plugin-dir / install / settings.json)가 만든다.
 //   - per-skill openai.yaml 금지, 스킬 트리 복제 금지.
 //   - 런타임 엔진 금지: loop·dynamic workers 는 *컴파일된 SKILL.md 본문에 self-gate 산문*으로 emit 한다
 //       (스킬 읽는 LLM 이 스스로 반복/선택 — 외부 오케스트레이터 없음). loop=do[] 마지막 phase 맨 위 self-gate,
-//       workers=첫 단락 뒤 선택 블록. (이전엔 둘 다 DEFER 였음.)
-//   - core/validate.mjs 는 .harness/core/ 그대로 SOURCE 로 emit (플러그인 트리로 옮기지 않음).
+//       workers=첫 단락 뒤 선택 블록.
+//   - core/validate.mjs 는 .harness/core/ 그대로 emit (검사 대상 config 와 같은 Project(.harness/) 영역, Core 묶음으로 옮기지 않음).
+//   - CLAUDE.md/AGENTS.md 전체 재작성 금지 — import 줄 존재검사 후 append-only (기존 사용자 파일 비손상).
 //
 // zero-dep(Node 빌트인만) · 크로스OS(mac·linux·windows).
 
@@ -49,7 +55,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const projectRoot = process.argv[2];
 if (!projectRoot) {
   console.log(`${c.r}사용법: node build-skills.mjs <project-root>${c.x}`);
-  console.log(`  예) node build-skills.mjs /path/to/my-project   (그 안의 .harness/ 를 plugins/<harness>/ 로 컴파일)`);
+  console.log(`  예) node build-skills.mjs /path/to/my-project   (그 안의 .harness/ 를 .agentoppa/ Core 묶음으로 빌드)`);
   process.exit(2);
 }
 const ROOT = resolve(projectRoot);
@@ -58,7 +64,7 @@ const cfgPath = join(harnessDir, "config.yaml");
 if (!existsSync(cfgPath)) { console.log(`${c.r}✗ config 없음: ${cfgPath}${c.x}`); process.exit(2); }
 
 console.log(`${c.d}build-skills${c.x} ${ROOT}`);
-console.log(`${c.d}  SOURCE${c.x} .harness/  ${c.d}→ COMPILED${c.x} plugins/<harness>/ + 루트 마켓 2개 (공유 한 트리)\n`);
+console.log(`${c.d}  Project${c.x} .harness/  ${c.d}→ Core 묶음${c.x} .agentoppa/ (자체완결: 마켓 2개 + plugins/<core>/)\n`);
 
 // ---------- 작은 유틸 (값 정리 — 인라인주석 견고) ----------
 // YAML 스칼라 값에서 인라인 주석(#)을 떼되, 따옴표 안의 #는 보존한다.
@@ -79,29 +85,33 @@ const clean = (s) => stripComment(s).trim().replace(/^["']|["']$/g, "");
 const splitList = (s) => stripComment(s).replace(/^\[|\]$/g, "").split(",").map((x) => x.trim().replace(/^["']|["']$/g, "")).filter(Boolean);
 
 // ---------- config.yaml 파서 (라인 기반, 이 양식 전용 — validate.mjs 와 동치, 인라인주석 견고화) ----------
+//   bindings/impl 블록 파싱은 validate.mjs 의 parseConfig 와 똑같이 둔다(둘이 동치여야 함).
 function parseConfig(text) {
   const lines = text.split(/\r?\n/);
-  const cfg = { scalars: {}, values: {}, phases: [] };
+  const cfg = { scalars: {}, values: {}, bindings: {}, impl: {}, phases: [] };
   let i = 0;
   const isBlank = (l) => l.trim() === "" || /^\s*#/.test(l);
   while (i < lines.length) {
     const l = lines[i];
     if (isBlank(l)) { i++; continue; }
     if (/^phases:\s*(#.*)?$/.test(l)) { i = parsePhases(lines, i + 1, cfg); continue; }
-    if (/^values:\s*(#.*)?$/.test(l)) { i = parseValues(lines, i + 1, cfg); continue; }
+    if (/^values:\s*(#.*)?$/.test(l)) { i = parseBlock(lines, i + 1, cfg.values); continue; }
+    if (/^bindings:\s*(#.*)?$/.test(l)) { i = parseBlock(lines, i + 1, cfg.bindings); continue; }
+    if (/^impl:\s*(#.*)?$/.test(l)) { i = parseBlock(lines, i + 1, cfg.impl); continue; }
     const m = l.match(/^([A-Za-z_][\w-]*):\s*(.*)$/);
     if (m && clean(m[2]) !== "") cfg.scalars[m[1]] = clean(m[2]);
     i++;
   }
   return cfg;
 
-  function parseValues(lines, i) {
+  // 1-depth 평평한 블록(`키: 값` 한 줄들)을 target 맵에 채운다. values·bindings·impl 공용.
+  function parseBlock(lines, i, target) {
     while (i < lines.length) {
       const l = lines[i];
       if (isBlank(l)) { i++; continue; }
       if (!/^\s+/.test(l)) break;
       const m = l.match(/^\s+([A-Za-z_][\w-]*):\s*(.*)$/);
-      if (m) cfg.values[m[1]] = clean(m[2]);
+      if (m) target[m[1]] = clean(m[2]);
       i++;
     }
     return i;
@@ -147,12 +157,61 @@ function parseConfig(text) {
 }
 
 // ---------- phase 파일 파서 (frontmatter + 본문) ----------
+// requires 항목 한 개를 {key, optional, kind} 로 푼다(validate.mjs 와 동형). `:capability` = 능력-빈자리.
+//   needs: 는 값-빈자리의 옛 이름 — 같은 requires 풀로 흡수(kind:"value").
+function parseRequire(token) {
+  const optional = /\?$/.test(token);
+  let key = token.replace(/\?$/, "");
+  let kind = "value";
+  if (/:capability$/.test(key)) { kind = "capability"; key = key.replace(/:capability$/, ""); }
+  return { key, optional, kind };
+}
+// `core: <name>` 묶음의 phase-소스 디렉터리를 찾는다 — startDir 에서 위로 올라가며 첫 매치.
+//   (build-skills.mjs ↔ validate.mjs 동치 — 둘이 같은 규칙으로 푼다.) startDir 자신부터 본다.
+//   위로 올라가는 이유: 한 Core 묶음을 *여러 프로젝트가 공유*(가리켜 재사용)할 때, 묶음이 프로젝트들의
+//   공통 상위(워크스페이스 루트)에 한 벌로 있으면 sibling 프로젝트들이 *같은 한 파일*을 가리킨다(복사 0,
+//   단일소스 — Core phase 한 장 고치면 N개 프로젝트 반영). 자기 루트에 묶음이 있으면 거기서 바로 멈춘다.
+function findCorePhasesDir(startDir, core) {
+  let dir = resolve(startDir);
+  for (;;) {
+    const cand = join(dir, ".agentoppa", "plugins", core, "phases");
+    if (existsSync(cand)) return cand;
+    const up = dirname(dir);
+    if (up === dir) return null; // 파일시스템 루트 도달.
+    dir = up;
+  }
+}
+// phase 소스 파일 위치 해석 (`core:` 적재 배선 — recipe.md §1·contract 정합).
+//   - `core:` 없으면(단독 하네스): 종전대로 .harness/project/phases/<name>.md 만.
+//   - `core: <name>` 있으면(재사용 모드): "복사 말고 가리켜 재사용". 두 곳을 *우선순위*로 본다.
+//       1) .harness/project/phases/<name>.md  — 있으면 이게 프로젝트 오버라이드(우선).
+//       2) <위로 탐색>/.agentoppa/plugins/<core>/phases/<name>.md — Core 묶음이 들고 있는 phase 소스(공유 단일본).
+//     [설계 결정 — 보고서 flag] 문서는 "Core 묶음 안" 까지만 못박았고 *정확한 파일·탐색*은 미확정이었다.
+//     Core 묶음(.agentoppa/)은 컴파일 산출 SKILL.md 만 들고 phase '소스'(슬롯 미치환 원문)는 없었다 →
+//     "Core phase 한 장 고치면 N개 프로젝트 반영"(단일소스)이 성립하려면 *소스 한 벌*이 묶음에 있어야 한다.
+//     그래서 (a) Core 빌드 때 phase 소스를 묶음의 phases/ 로 emit(자체완결·이식 보존), (b) 소비 프로젝트는
+//     core:<name> 로 그 phases/<name>.md 를 *가리켜* 컴파일(복사 0). SKILL.md(컴파일물)는 소스로 안 쓴다.
+function phaseSourceFile(name) {
+  const local = join(harnessDir, "project", "phases", `${name}.md`);
+  if (existsSync(local)) return local; // 단독 하네스 = 여기만 · 재사용 모드 = 프로젝트 오버라이드(우선).
+  const core = C && C.scalars && C.scalars.core ? kebab(C.scalars.core) : null;
+  if (core) {
+    const dir = findCorePhasesDir(ROOT, core); // 자기 루트 → 위로 탐색(공유 묶음).
+    if (dir) {
+      const fromCore = join(dir, `${name}.md`);
+      if (existsSync(fromCore)) return fromCore; // Core 묶음이 들고 있는 phase 소스(가리켜 재사용).
+    }
+  }
+  return null;
+}
 function parsePhase(name) {
-  const file = join(harnessDir, "project", "phases", `${name}.md`);
-  if (!existsSync(file)) return null;
+  const file = phaseSourceFile(name); // core: 적재 배선 — 없으면 project/phases/, core: 면 묶음 phases/ 도.
+  if (!file) return null;
   const raw = readFileSync(file, "utf8");
   const m = raw.match(/^---\s*\r?\n([\s\S]*?)\r?\n---\s*\r?\n?([\s\S]*)$/);
-  const fm = { name, consumes: [], produces: null, needs: [], hasWorkers: false, workers: null };
+  const fm = { name, consumes: [], produces: null, requires: [], hasWorkers: false, workers: null };
+  fm.srcFile = file;            // 어디서 소스를 읽었나 — 묶음 phase-소스 emit 판단(아래 §1)에 쓴다.
+  fm.raw = raw;                 //   원문(슬롯 미치환) — 로컬 저작이면 Core 묶음 phases/ 로 그대로 옮긴다.
   fm.body = m ? m[2].trim() : raw.trim();
   if (!m) { fm.malformed = true; return fm; }
   const fmText = m[1];
@@ -188,8 +247,11 @@ function parsePhase(name) {
     else if ((mm = l.match(/^desc:\s*(.+)$/))) fm.desc = clean(mm[1]);
     else if ((mm = l.match(/^when:\s*(.+)$/))) { const x = clean(mm[1]); fm.when = (x === "~" || x === "") ? null : x; }
     else if ((mm = l.match(/^produces:\s*(.+)$/))) { const x = clean(mm[1]); fm.produces = (x === "~" || x === "") ? null : x; }
-    else if ((mm = l.match(/^consumes:\s*(.+)$/))) fm.consumes = splitList(mm[1]).map((r) => ({ role: r.replace(/\?$/, ""), optional: /\?$/.test(r) }));
-    else if ((mm = l.match(/^needs:\s*(.+)$/))) fm.needs = splitList(mm[1]).map((r) => ({ key: r.replace(/\?$/, ""), optional: /\?$/.test(r) }));
+    // consumes: ~ (YAML null = 아무것도 안 받음) · 빈값 → 빈 리스트. produces 가드와 대칭(안 그러면 header inputs 에 팬텀 역할 '~' 누수).
+    else if ((mm = l.match(/^consumes:\s*(.+)$/))) { const x = clean(mm[1]); fm.consumes = (x === "~" || x === "") ? [] : splitList(mm[1]).map((r) => ({ role: r.replace(/\?$/, ""), optional: /\?$/.test(r) })); }
+    // requires 와 needs(옛 이름) 둘 다 requires 풀로 모은다. needs 항목은 항상 값-빈자리(kind:"value").
+    else if ((mm = l.match(/^requires:\s*(.+)$/))) fm.requires.push(...splitList(mm[1]).map(parseRequire));
+    else if ((mm = l.match(/^needs:\s*(.+)$/))) fm.requires.push(...splitList(mm[1]).map((r) => ({ ...parseRequire(r), kind: "value" })));
     else if ((mm = l.match(/^gate:\s*(.+)$/))) fm.gate = clean(mm[1]);
     else if ((mm = l.match(/^tier:\s*(.+)$/))) fm.tier = clean(mm[1]);
   }
@@ -252,6 +314,33 @@ function enrichHeader(body, phaseName, consumesRoles) {
 function substituteNext(body, nextName) {
   const repl = nextName ? `/${nextName}` : "(종착)";
   return body.replace(/\{next\}/g, repl);
+}
+
+// {cap:<이름>} → 런타임-읽기 산문. 값 슬롯과 달리 *결과를 박지 않는다* — 본문이 실행 시 .harness/config.yaml 을
+//   직접 읽어 풀게 만든다(같은 Core 가 프로젝트마다 다른 구현으로 동작 = 재사용). when/loop self-gate emit 과 동형.
+//   동작: 각 {cap:이름} 인라인을 '`이름`(능력)' 으로 바꾸고, 본문 끝에 *능력별 한 번* 해석 안내 단락을 붙인다.
+//     - 조사 중립: 토큰을 괄호로 끊어('`이름`(능력)') 뒤에 어떤 한국어 조사(로/를/은…)가 붙어도 자연스럽게 읽힌다.
+//       (옛 '**이름** 능력' 은 본문 '{cap:x} 로' 를 '능력 로'(비문)로 만들었다 — insertStrictGateNote 콜론형 선례와 같은 결).
+//     - capKeys: 이 phase 의 requires 중 kind:"capability" 인 이름 집합. 여기 없는 {cap:x} 는 미선언이라
+//       치환하지 않고 그대로 둔다(뒤의 미치환 슬롯 경고가 잡는다 — 오타·미선언 능력 탐지).
+//   substituteValues(값 슬롯) 보다 *먼저* 돌려야 한다 — {cap:..} 의 콜론이 값 슬롯 정규식에 걸리지 않게.
+function expandCapabilitySlots(body, capKeys) {
+  const used = new Set();
+  let out = body.replace(/\{cap:([^{}]+)\}/g, (whole, raw) => {
+    const cap = raw.trim();
+    if (!capKeys.has(cap)) return whole; // 미선언 능력 슬롯 → 보존(미치환 경고로 잡음).
+    used.add(cap);
+    return `\`${cap}\`(능력)`;
+  });
+  if (!used.size) return out;
+  // 능력별 해석 안내(결정적 산문). 정렬해 멱등 — 재컴파일해도 같은 텍스트.
+  const notes = [...used].sort().map((cap) =>
+    `\`${cap}\`(능력)의 구현은 \`.harness/config.yaml\` 의 \`bindings: ${cap}:\` 가 가리키는 값이다. ` +
+    `그 값이 단일 토큰이면 같은 파일 \`impl:\` 아래 그 키가, 명령·경로면 그 자체가 알맹이다. ` +
+    `지금 그 값을 읽어 그대로 실행하라(경로면 그 파일을 열어 따른다). ` +
+    `못 찾으면 멈추고 "바인딩 없음: ${cap}" 라 알린다(값을 추측하지 않는다).`
+  ).join("\n");
+  return `${out.replace(/\s+$/, "")}\n\n${notes}`;
 }
 
 // when → self-gate: 본문 맨 위에 자가 점검 문장 삽입 (contract/phases.md §self-gate).
@@ -332,6 +421,29 @@ function prependLoopGate(body, until, max, doNames, loopFirst, loopExit) {
 function ensureDir(d) { if (!existsSync(d)) mkdirSync(d, { recursive: true }); }
 function writeJSON(p, obj) { writeFileSync(p, JSON.stringify(obj, null, 2) + "\n"); }
 
+// ---------- fallback 배선 (CLAUDE.md/AGENTS.md 에 Core 규칙 import 줄을 append-only·멱등으로) ----------
+// 비손상 불변식: 기존 사용자 파일을 *전체 재작성하지 않는다* — import 줄이 이미 있으면 skip, 없으면 끝에 한 줄 추가,
+//   파일 자체가 없으면 최소 헤더와 함께 생성. importLine 토큰(경로)이 들어 있으면 '있음'으로 본다 → 멱등(재실행 무변).
+//   tool="claude" 면 '@<경로>' 형식(Claude import 문법), "agents" 면 경로 한 줄(AGENTS.md 는 산문 참조).
+function wireFallback(filePath, importLine, tool) {
+  const rel = importLine.replace(/^@/, "");
+  if (existsSync(filePath)) {
+    const cur = readFileSync(filePath, "utf8");
+    // 이미 그 Core 규칙 경로를 가리키면(어떤 형식이든) 그대로 둔다 — 멱등.
+    if (cur.includes(rel)) { info(`${basename(filePath)}: Core 규칙 import 이미 있음 — 유지(멱등)`); return; }
+    // 끝에 빈 줄 보장 후 import 줄만 append (기존 내용 보존).
+    const sep = cur.endsWith("\n\n") ? "" : (cur.endsWith("\n") ? "\n" : "\n\n");
+    writeFileSync(filePath, cur + sep + importLine + "\n");
+    ok(`${basename(filePath)}: Core 규칙 import 줄 추가(append-only) → ${importLine}`);
+  } else {
+    // 신규 생성: 최소 헤더 + import. (이 repo CLAUDE.md/AGENTS.md 브리지 패턴과 동형.)
+    const title = tool === "claude" ? "# CLAUDE.md" : "# AGENTS.md";
+    const note = "> 플러그인 없이 떠도 행동 가드가 살아있게 — 아래 import 로 Core 규칙(always-on)을 읽는다(fallback).";
+    writeFileSync(filePath, `${title}\n\n${note}\n\n${importLine}\n`);
+    ok(`${basename(filePath)}: 신규 생성 + Core 규칙 import → ${importLine}`);
+  }
+}
+
 // ---------- 메인 ----------
 const C = parseConfig(readFileSync(cfgPath, "utf8"));
 
@@ -350,17 +462,18 @@ const feature = C.scalars.feature || gitBranchSlug() || "default";
 const sync = C.scalars.sync || "medium";
 const valueSlots = buildValueSlots(C.values);
 
-// harness 이름: config.harness → 합리적 기본. 플러그인 폴더·매니페스트 name 이 된다 (kebab-case 강제).
+// Core 이름: config.core(재사용 모드, 가리키는 Core 이름) → config.harness(단독 하네스 하위호환) → basename(ROOT).
+//   이게 Core 묶음 폴더(.agentoppa/plugins/<core>/)·매니페스트 name 이 된다 (kebab-case 강제 — recipe.md §9).
 function kebab(s) { return String(s).trim().toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, ""); }
-const harnessRaw = C.scalars.harness || basename(ROOT) || "harness";
-const harness = kebab(harnessRaw) || "harness";
-if (harness !== harnessRaw) info(`harness 이름 정규화: '${harnessRaw}' → '${harness}' (plugin name 은 kebab-case)`);
+const coreRaw = C.scalars.core || C.scalars.harness || basename(ROOT) || "core";
+const coreName = kebab(coreRaw) || "core";
+if (coreName !== coreRaw) info(`Core 이름 정규화: '${coreRaw}' → '${coreName}' (plugin name 은 kebab-case)`);
 const version = C.scalars.version || "0.1.0";
-const description = C.scalars.description || `${harness} 하네스 (AgentOppa 컴파일).`;
+const description = C.scalars.description || `${coreName} Core (AgentOppa 빌드).`;
 const owner = C.scalars.owner || "AgentOppa";
-const displayName = C.scalars.display_name || harness;
+const displayName = C.scalars.display_name || coreName;
 
-info(`harness=${harness} · feature=${feature} · sync=${sync} · routing=${C.scalars.routing || "(기본)"}`);
+info(`core=${coreName} · feature=${feature} · sync=${sync} · routing=${C.scalars.routing || "(기본)"}`);
 
 // phases 펼침 (loop 안 항목도 시퀀스로; loop 의 self-gate 는 do[] 마지막 phase 본문에 emit).
 //   각 loop 항목에 loop 메타를 단다: first(되돌아갈 곳)·last(여기서 until 판정)·until·max·doNames.
@@ -388,14 +501,17 @@ if (!seq.length) { bad("phases 비어 있음 — 컴파일할 게 없음"); proc
 //   loop 의 마지막 phase 는 next 가 'loop 탈출구'(= 묶음 다음)이기도 하다. self-gate 가 이를 exit 으로 쓴다.
 for (let i = 0; i < seq.length; i++) seq[i].next = seq[i + 1] ? seq[i + 1].name : null;
 
-// ---------- 플러그인 트리 경로 (AgentOppa 자신과 동형) ----------
-const pluginDir = join(ROOT, "plugins", harness);          // <root>/plugins/<harness>/
+// ---------- Core 묶음 트리 경로 (.agentoppa/ 자체완결 — AgentOppa 자신과 동형) ----------
+const coreRoot = join(ROOT, ".agentoppa");                 // <root>/.agentoppa/ (이식 가능한 Core 한 벌)
+const pluginDir = join(coreRoot, "plugins", coreName);     //   plugins/<core>/
 const skillsDir = join(pluginDir, "skills");               //   skills/<phase>/SKILL.md  (공유 한 트리)
+const phasesDir = join(pluginDir, "phases");               //   phases/<name>.md  (phase 소스 — 재사용 단일본)
 const agentsDir = join(pluginDir, "agents");               //   agents/<name>.md (+.toml)
 const hooksDir = join(pluginDir, "hooks");                 //   hooks/hooks.json (+ .mjs)
 const claudePluginDir = join(pluginDir, ".claude-plugin"); //   .claude-plugin/plugin.json (메타만)
 const codexPluginDir = join(pluginDir, ".codex-plugin");   //   .codex-plugin/plugin.json (메타 + 포인터)
-const pluginSource = `./plugins/${harness}`;               // 마켓 source (루트 '.' 아님 — codex 발견 요건)
+// 마켓 source 는 *묶음 상대* — 마켓 파일이 .agentoppa/{.claude-plugin,.agents/plugins}/ 에 사니 ./plugins/<core> 그대로.
+const pluginSource = `./plugins/${coreName}`;              // 마켓 source (루트 '.' 아님 — codex 발견 요건)
 
 // 어떤 phase 가 strict 인지(게이트 훅 필요 판단). phase override > 전역 sync.
 function effectiveSync(item) { return item.syncOverride || sync; }
@@ -406,14 +522,14 @@ const cards = {};
 for (const item of seq) {
   if (cards[item.name]) continue;
   const card = parsePhase(item.name);
-  if (!card) { warn(`phase '${item.name}' 정의 없음: project/phases/${item.name}.md (스킵 — 즉석저작은 LLM 몫)`); continue; }
+  if (!card) { warn(`phase '${item.name}' 정의 없음: project/phases/${item.name}.md (스킵 — phase 본문은 LLM이 직접 작성)`); continue; }
   if (card.malformed) warn(`phase '${item.name}' frontmatter 형식 이상 — 본문만 사용`);
   cards[item.name] = card;
   if (card.produces) knownRoles.add(card.produces);
   for (const cn of card.consumes) knownRoles.add(cn.role);
 }
 
-// ===== 1. phase → plugins/<harness>/skills/<name>/SKILL.md (공유 한 트리, openai.yaml 없음) =====
+// ===== 1. phase → .agentoppa/plugins/<core>/skills/<name>/SKILL.md (공유 한 트리, openai.yaml 없음) =====
 let madeSkills = 0;
 const seenSkill = new Set();
 for (const item of seq) {
@@ -428,13 +544,17 @@ for (const item of seq) {
 
   // --- 본문 슬롯 치환 (순서 주의) ---
   let body = card.body;
+  // (a0) {cap:<능력>} → 런타임-읽기 산문 (값/role/next 치환보다 *먼저* — 콜론이 값 슬롯 정규식에 안 걸리게).
+  //      값 슬롯은 박지만 능력 슬롯은 박지 않는다(재사용 비결). capKeys = 이 phase requires 의 능력 이름.
+  const capKeys = new Set(card.requires.filter((r) => r.kind === "capability").map((r) => r.key));
+  body = expandCapabilitySlots(body, capKeys);
   // (a) {role} → 경로. knownRoles 의 각 역할에 대해 {role} 치환.
   for (const role of knownRoles) {
     const re = new RegExp(`\\{${role.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\}`, "g");
     body = body.replace(re, artifactPath(feature, role));
   }
-  // (a2) SOURCE-only 주석 제거: 본문에 새어든 '(produces: ~)' 는 frontmatter 개념이라 컴파일 산출에 두지 않는다.
-  //      (컴파일러는 슬롯 치환이 본분이고 산문을 고쳐쓰지 않지만, 이 토큰은 명백한 SOURCE 누수라 슬롯처럼 떼어낸다.)
+  // (a2) frontmatter 누수 주석 제거: 본문에 새어든 '(produces: ~)' 는 frontmatter 개념이라 컴파일 산출에 두지 않는다.
+  //      (컴파일러는 슬롯 치환이 본분이고 산문을 고쳐쓰지 않지만, 이 토큰은 명백한 frontmatter 누수라 슬롯처럼 떼어낸다.)
   body = body.replace(/\s*\(\s*produces:\s*~\s*\)/g, "");
   // (b) {프로젝트값} → values (role/next 제외).
   body = substituteValues(body, valueSlots, knownRoles);
@@ -475,17 +595,29 @@ for (const item of seq) {
 
   const skillMd = `---\nname: ${item.name}\ndescription: ${desc}\n---\n${body}\n`;
 
-  // 공유 한 트리: plugins/<harness>/skills/<name>/SKILL.md (Claude 자동발견 + Codex 포인터가 같은 트리를 가리킴).
+  // 공유 한 트리: .agentoppa/plugins/<core>/skills/<name>/SKILL.md (Claude 자동발견 + Codex 포인터가 같은 트리를 가리킴).
   // 복제 없음 · openai.yaml 없음 — AgentOppa 자신의 검증된 모델.
   const sDir = join(skillsDir, item.name);
   ensureDir(sDir);
   writeFileSync(join(sDir, "SKILL.md"), skillMd);
-  ok(`plugins/${harness}/skills/${item.name}/SKILL.md`);
+  ok(`.agentoppa/plugins/${coreName}/skills/${item.name}/SKILL.md`);
+
+  // phase 소스(슬롯 미치환 원문)를 Core 묶음 phases/ 로 emit — *로컬 저작*일 때만(이 프로젝트가 Core 의 저자).
+  //   왜: Core 묶음(.agentoppa/)이 phase 소스를 들고 있어야 다른 프로젝트가 core:<name> 로 *가리켜* 재컴파일하고,
+  //       Core phase 한 장을 고치면 그 한 벌 소스가 N개 프로젝트에 반영된다(복사 0 = 단일소스 재사용).
+  //   재사용 모드(소스를 이미 묶음에서 읽은 경우)는 자기 묶음을 덮어쓰지 않는다 — 한방향(저자만 emit).
+  const localPhasesDir = join(harnessDir, "project", "phases");
+  const authoredHere = card.srcFile && resolve(card.srcFile).startsWith(resolve(localPhasesDir) + "/");
+  if (authoredHere) {
+    ensureDir(phasesDir);
+    writeFileSync(join(phasesDir, `${item.name}.md`), card.raw); // 원문 그대로(byte-보존) — 컴파일 전 소스.
+    ok(`.agentoppa/plugins/${coreName}/phases/${item.name}.md (phase 소스 — 재사용 단일본)`);
+  }
 
   madeSkills++;
 }
 
-// ===== 2. project/agents/*.md → plugins/<harness>/agents/*.md (Claude) + *.toml (Codex, build-agents.mjs) =====
+// ===== 2. project/agents/*.md → .agentoppa/plugins/<core>/agents/*.md (Claude) + *.toml (Codex, build-agents.mjs) =====
 // 공유 한 트리: 소스 .md 와 생성 .toml 을 같은 agents/ 폴더에 둔다 (.codex/ 별도 트리 안 만듦).
 //   Claude 는 agents/*.md 자동발견. Codex 플러그인 에이전트 자동발견 경로는 미정(ccc-agents cross-tool §4)이라
 //   .codex-plugin 에 agents 포인터를 넣지 않는다(그건 Claude 전용 키 — ccc-plugin validator 가 codex 매니페스트에서 경고).
@@ -497,12 +629,12 @@ if (existsSync(srcAgentsDir) && statSync(srcAgentsDir).isDirectory()) {
   const agentFiles = readdirSync(srcAgentsDir).filter((f) => f.endsWith(".md"));
   if (agentFiles.length) {
     hasAgents = true;
-    console.log(`\n${c.d}agents${c.x} project/agents/ → plugins/${harness}/agents/ (.md 소스 + .toml 동반생성)`);
+    console.log(`\n${c.d}agents${c.x} project/agents/ → .agentoppa/plugins/${coreName}/agents/ (.md 소스 + .toml 동반생성)`);
     ensureDir(agentsDir);
     // (a) Claude: .md 는 그대로 복사 (단일 소스, Claude 자동발견).
     for (const f of agentFiles) {
       copyFileSync(join(srcAgentsDir, f), join(agentsDir, f));
-      ok(`plugins/${harness}/agents/${f}`);
+      ok(`.agentoppa/plugins/${coreName}/agents/${f}`);
       madeAgents++;
     }
     // (b) Codex: build-agents.mjs 를 호출해 같은 폴더에 .toml 동반생성 (재사용 — 같은 변환 로직).
@@ -512,7 +644,7 @@ if (existsSync(srcAgentsDir) && statSync(srcAgentsDir).isDirectory()) {
       const r = spawnSync(process.execPath, [buildAgents, agentsDir, agentsDir], { encoding: "utf8" });
       if (r.stdout) process.stdout.write(r.stdout.split("\n").map((l) => l ? "    " + l : l).join("\n"));
       if (r.status !== 0) bad(`build-agents.mjs 실패 (exit ${r.status})${r.stderr ? ": " + r.stderr.trim() : ""}`);
-      else ok(`plugins/${harness}/agents/*.toml 생성됨 (Codex 소비처가 .codex/agents/ 로 복사)`);
+      else ok(`.agentoppa/plugins/${coreName}/agents/*.toml 생성됨 (Codex 소비처가 .codex/agents/ 로 복사)`);
     } else {
       bad(`build-agents.mjs 없음: ${buildAgents} — Codex 에이전트 .toml 미생성`);
     }
@@ -521,7 +653,7 @@ if (existsSync(srcAgentsDir) && statSync(srcAgentsDir).isDirectory()) {
   info("project/agents/ 없음 — 보조 에이전트 스킵");
 }
 
-// ===== 3. strict 게이트 훅 → plugins/<harness>/hooks/ (공유 한 트리) =====
+// ===== 3. strict 게이트 훅 → .agentoppa/plugins/<core>/hooks/ (공유 한 트리) =====
 // strict phase 가 하나라도 있으면 비손상/게이트 훅을 emit (공유 hooks.json 한 벌, Codex 는 plugin.json 포인터로).
 //   주의: 게이트 훅의 *구체 로직*(무엇을 차단할지)은 phase·프로젝트마다 다르다.
 //   여기선 가장 흔한 '비손상(기존 src/·test/ 무수정)' 가드를 결정적으로 emit 한다.
@@ -530,12 +662,12 @@ const strictPhases = seq.filter((it) => cards[it.name] && effectiveSync(it) === 
 let hasHooks = false;
 if (strictPhases.length) {
   hasHooks = true;
-  console.log(`\n${c.d}hooks${c.x} strict 게이트 ${strictPhases.length}개: ${strictPhases.map((p) => p.name).join(", ")} → plugins/${harness}/hooks/ (공유)`);
+  console.log(`\n${c.d}hooks${c.x} strict 게이트 ${strictPhases.length}개: ${strictPhases.map((p) => p.name).join(", ")} → .agentoppa/plugins/${coreName}/hooks/ (공유)`);
   ensureDir(hooksDir);
 
   const hookScript = GATE_HOOK_SCRIPT();
   writeFileSync(join(hooksDir, "gate-review.mjs"), hookScript);
-  ok(`plugins/${harness}/hooks/gate-review.mjs (공유 — Claude·Codex 한 벌)`);
+  ok(`.agentoppa/plugins/${coreName}/hooks/gate-review.mjs (공유 — Claude·Codex 한 벌)`);
 
   // 공유 hooks.json (양쪽 같은 JSON 모양 — ccc-hooks §1). 경로변수는 ${CLAUDE_PLUGIN_ROOT}
   //   (Codex 가 별칭으로 받음 — ccc-plugin template '경로 변수'). 스크립트 위치를 가리키되,
@@ -551,7 +683,7 @@ if (strictPhases.length) {
     },
   };
   writeJSON(join(hooksDir, "hooks.json"), hooksJson);
-  ok(`plugins/${harness}/hooks/hooks.json (공유 — Codex 는 .codex-plugin 포인터로 가리킴)`);
+  ok(`.agentoppa/plugins/${coreName}/hooks/hooks.json (공유 — Codex 는 .codex-plugin 포인터로 가리킴)`);
 
   info("주: 이 훅은 '비손상(기존 src/·test/ 무수정)' 기본 가드다. phase 의 gate 가 다른 조건이면 ccc-hooks 로 맞춤 작성 필요.");
 } else {
@@ -559,20 +691,20 @@ if (strictPhases.length) {
 }
 
 // ===== 4. 매니페스트 2개 (plugin.json) — AgentOppa 자신과 동형 =====
-console.log(`\n${c.d}manifests${c.x} plugins/${harness}/.claude-plugin + .codex-plugin`);
+console.log(`\n${c.d}manifests${c.x} .agentoppa/plugins/${coreName}/.claude-plugin + .codex-plugin`);
 ensureDir(claudePluginDir);
 ensureDir(codexPluginDir);
 
 // Claude: 메타만 (컴포넌트는 자동발견). ccc-plugin template §1.
-const claudeManifest = { name: harness, version, description };
+const claudeManifest = { name: coreName, version, description };
 if (C.scalars.author) claudeManifest.author = C.scalars.author;
 writeJSON(join(claudePluginDir, "plugin.json"), claudeManifest);
-ok(`plugins/${harness}/.claude-plugin/plugin.json (메타만)`);
+ok(`.agentoppa/plugins/${coreName}/.claude-plugin/plugin.json (메타만)`);
 
 // Codex: 메타 + 존재하는 컴포넌트 포인터 (없는 건 빼라 — ccc-plugin template §2 / manifest §3).
 //   skills 포인터: skills/ 가 있으면 필수 (validator error 조건). hooks: hooks.json 이 있으면.
 //   agents 는 Codex 매니페스트 포인터가 없다(Claude 전용 키 — validator 가 codex 매니페스트에서 경고). 빼둔다.
-const codexManifest = { name: harness, version, description };
+const codexManifest = { name: coreName, version, description };
 if (C.scalars.author) codexManifest.author = C.scalars.author;
 const codexPointers = [];
 if (madeSkills > 0) { codexManifest.skills = "./skills/"; codexPointers.push("skills→./skills/"); }
@@ -580,33 +712,34 @@ if (hasHooks) { codexManifest.hooks = "./hooks/hooks.json"; codexPointers.push("
 // UI 메타(선택) — AgentOppa 자신은 안 싣지만, displayName 만 있으면 Codex 표시명이 깔끔. category 는 마켓에.
 codexManifest.interface = { displayName };
 writeJSON(join(codexPluginDir, "plugin.json"), codexManifest);
-ok(`plugins/${harness}/.codex-plugin/plugin.json (메타 + 포인터: ${codexPointers.length ? codexPointers.join(", ") : "없음"})`);
+ok(`.agentoppa/plugins/${coreName}/.codex-plugin/plugin.json (메타 + 포인터: ${codexPointers.length ? codexPointers.join(", ") : "없음"})`);
 
-// ===== 5. 마켓플레이스 2개 (repo 루트) — 도구별 스키마 =====
-console.log(`\n${c.d}marketplaces${c.x} .claude-plugin/ (Claude) + .agents/plugins/ (Codex)`);
+// ===== 5. 마켓플레이스 2개 (Core 묶음 안) — 도구별 스키마 =====
+// 묶음 자체완결: 마켓도 .agentoppa/ 안에 둔다(repo 루트 아님) → 묶음 통째로 이식·복붙해도 source 가 그대로 가리킴.
+console.log(`\n${c.d}marketplaces${c.x} .agentoppa/.claude-plugin/ (Claude) + .agentoppa/.agents/plugins/ (Codex)`);
 
-// Claude 마켓: owner 스키마. source 는 ./plugins/<harness> (문자열). ccc-plugin template §3.
-const claudeMarketDir = join(ROOT, ".claude-plugin");
+// Claude 마켓: owner 스키마. source 는 ./plugins/<core> (묶음 상대 문자열 — 마켓이 .agentoppa/ 안이라). ccc-plugin template §3.
+const claudeMarketDir = join(coreRoot, ".claude-plugin");
 ensureDir(claudeMarketDir);
 const claudeMarket = {
-  name: harness,
+  name: coreName,
   owner: { name: owner },
-  plugins: [{ name: harness, source: pluginSource, description }],
+  plugins: [{ name: coreName, source: pluginSource, description }],
 };
 writeJSON(join(claudeMarketDir, "marketplace.json"), claudeMarket);
-ok(`.claude-plugin/marketplace.json (owner='${owner}', source='${pluginSource}')`);
+ok(`.agentoppa/.claude-plugin/marketplace.json (owner='${owner}', source='${pluginSource}')`);
 
-// Codex 마켓: name + interface + policy AVAILABLE. source.path 는 ./plugins/<harness> (루트 '.' 금지). ccc-plugin template §4.
+// Codex 마켓: name + interface + policy AVAILABLE. source.path 는 ./plugins/<core> (묶음 상대, 루트 '.' 금지). ccc-plugin template §4.
 //   owner{} 누수 금지 (codex 가 무시·validator 경고). category 필수 권장.
-const codexMarketDir = join(ROOT, ".agents", "plugins");
+const codexMarketDir = join(coreRoot, ".agents", "plugins");
 ensureDir(codexMarketDir);
 const codexCategory = C.scalars.category || "Development";
 const codexMarket = {
-  name: harness,
+  name: coreName,
   interface: { displayName },
   plugins: [
     {
-      name: harness,
+      name: coreName,
       source: { source: "local", path: pluginSource },
       policy: { installation: "AVAILABLE", authentication: "ON_INSTALL" },
       category: codexCategory,
@@ -614,12 +747,12 @@ const codexMarket = {
   ],
 };
 writeJSON(join(codexMarketDir, "marketplace.json"), codexMarket);
-ok(`.agents/plugins/marketplace.json (name='${harness}', source.path='${pluginSource}', policy=AVAILABLE)`);
+ok(`.agentoppa/.agents/plugins/marketplace.json (name='${coreName}', source.path='${pluginSource}', policy=AVAILABLE)`);
 
-// ===== 6. core/validate.mjs 단일소스 emit (SOURCE 그대로 .harness/core/) =====
+// ===== 6. core/validate.mjs 단일소스 emit (.harness/core/ 그대로) =====
 // 정본 = agent-engineer/scripts/validate.mjs. .harness/core/ 로 복사해 자기검사 독립(지난 라이브의 '즉흥 복사' 결정화).
-//   플러그인 트리로 옮기지 않는다 — 검사 대상(.harness/config.yaml)과 같은 SOURCE 영역에 둔다.
-console.log(`\n${c.d}core${c.x} validate.mjs 정본 복사 → .harness/core/ (SOURCE)`);
+//   플러그인 트리로 옮기지 않는다 — 검사 대상(.harness/config.yaml)과 같은 Project(.harness/) 영역에 둔다.
+console.log(`\n${c.d}core${c.x} validate.mjs 정본 복사 → .harness/core/ (Project 영역)`);
 const canonicalValidate = resolve(__dirname, "..", "skills", "agent-engineer", "scripts", "validate.mjs");
 if (existsSync(canonicalValidate)) {
   const coreDir = join(harnessDir, "core");
@@ -633,18 +766,42 @@ if (existsSync(canonicalValidate)) {
 // loop: do[]의 마지막 phase 본문에 self-gate 산문으로 emit 됨(위 e3) — 반복·카운트는 스킬 읽는 에이전트가 수행(엔진 없음).
 if (sawLoop) info(`loop self-gate: do[] 마지막 phase 본문 맨 위에 '조건 충족까지 반복' 산문으로 컴파일됨 (반복 제어는 LLM self-gate — 엔진 없음).`);
 
+// ===== 7. Core 행동 규칙(always-on.md) emit + CLAUDE.md/AGENTS.md fallback 배선 =====
+// fallback 의 뜻: 플러그인을 안 실어도(--plugin-dir 없이 떠도) 프로젝트 루트 CLAUDE.md/AGENTS.md 가 Core 규칙을
+//   import 하므로 *행동 가드*는 산다(규칙만 — 단계 스킬·게이트 같은 실행 부품은 플러그인 적재 필요). ARCHITECTURE §Fallback.
+//   = 이 repo 자신이 쓰는 always-on 브리지 패턴을 생성물에도 심는다.
+console.log(`\n${c.d}fallback${c.x} Core 규칙 emit + CLAUDE.md/AGENTS.md import 배선 (append-only · 멱등)`);
+const canonicalAlwaysOn = resolve(__dirname, "..", "always-on.md");
+const alwaysOnRel = `.agentoppa/plugins/${coreName}/always-on.md`; // 프로젝트 루트 기준 — import 줄이 가리키는 곳.
+if (existsSync(canonicalAlwaysOn)) {
+  ensureDir(pluginDir);
+  copyFileSync(canonicalAlwaysOn, join(pluginDir, "always-on.md"));
+  ok(`${alwaysOnRel} (Core 행동 규칙 — fallback import 대상)`);
+  // CLAUDE.md(@import)·AGENTS.md(경로 한 줄) 둘 다 배선. 기존 파일은 import 줄만 append(없으면 생성) — 전체 재작성 금지.
+  wireFallback(join(ROOT, "CLAUDE.md"), `@${alwaysOnRel}`, "claude");
+  wireFallback(join(ROOT, "AGENTS.md"), alwaysOnRel, "agents");
+} else {
+  bad(`정본 always-on.md 없음: ${canonicalAlwaysOn} — Core 규칙·fallback 미생성`);
+}
+
+// ===== 8. .agentoppa/README.md emit (연동 명령 + 폴더 목적 + 배포 옵션) =====
+console.log(`\n${c.d}readme${c.x} .agentoppa/README.md emit (적재 메뉴·폴더 목적·배포 옵션)`);
+ensureDir(coreRoot);
+writeFileSync(join(coreRoot, "README.md"), CORE_README(coreName, pluginSource, description));
+ok(`.agentoppa/README.md (적재 메뉴 + 폴더 목적 + 배포 옵션)`);
+
 // ===== 마무리 =====
-console.log(`\n${c.d}─── packaging (AgentOppa 모델: 공유 한 트리 + 두 매니페스트 포인터) ───${c.x}`);
-info(`Claude: plugins/${harness}/ 컴포넌트 자동발견. Codex: .codex-plugin/plugin.json 포인터(${codexPointers.length ? codexPointers.join(" · ") : "skills 없음?"}) 로 발견.`);
-info(`마켓 source 는 '${pluginSource}' (루트 '.' 아님 — codex 'No plugins found' 회피).`);
-if (hasAgents) info(`Codex 에이전트: plugins/${harness}/agents/*.toml 을 소비 프로젝트 .codex/agents/ 로 복사(플러그인 자동발견 경로 미정).`);
+console.log(`\n${c.d}─── packaging (재사용 Core 모델: .agentoppa/ 자체완결 묶음 + 두 마켓 포인터) ───${c.x}`);
+info(`Claude: .agentoppa/plugins/${coreName}/ 컴포넌트 자동발견. Codex: .codex-plugin/plugin.json 포인터(${codexPointers.length ? codexPointers.join(" · ") : "skills 없음?"}) 로 발견.`);
+info(`마켓 source 는 '${pluginSource}' (묶음 상대 — 루트 '.' 아님, codex 'No plugins found' 회피).`);
+if (hasAgents) info(`Codex 에이전트: .agentoppa/plugins/${coreName}/agents/*.toml 을 소비 프로젝트 .codex/agents/ 로 복사(플러그인 자동발견 경로 미정).`);
 
 console.log(`\n${c.g}✓ build-skills 완료${c.x}: 스킬 ${madeSkills} · 에이전트 ${madeAgents} · 훅 ${hasHooks ? "있음" : "없음"} · 경고 ${warns} · 오류 ${errors}`);
 if (deferred.length) {
   console.log(`${c.b}DEFER ${deferred.length}건${c.x} (가짜 구현 대신 명시 보류):`);
   for (const d of deferred) console.log(`  - ${d.split(" — ")[0]}`);
 }
-console.log(`다음: node plugins/agentoppa/skills/ccc-plugin/scripts/validate.mjs ${pluginSource}  로 매니페스트·마켓 점검.`);
+console.log(`다음: node plugins/agentoppa/skills/ccc-plugin/scripts/validate.mjs ${pluginDir}  로 Core 플러그인(매니페스트·마켓) 점검.`);
 process.exit(errors === 0 ? 0 : 1);
 
 // ---------- 게이트 훅 스크립트 본문 (비손상 가드, 결정적 emit) ----------
@@ -686,5 +843,57 @@ if (guarded) {
   process.exit(0);
 }
 process.exit(0);
+`;
+}
+
+// ---------- .agentoppa/README.md 본문 (적재 메뉴 + 폴더 목적 + 배포 옵션, 결정적 emit) ----------
+// 멱등: 같은 (core, source, description) → byte-identical. 본문은 산문(템플릿) — 컴파일러가 상황별로 안 고친다.
+function CORE_README(core, source, desc) {
+  const pdir = `./plugins/${core}`; // 프로젝트 루트 기준 적재 경로(.agentoppa 안 묶음).
+  return `# ${core} — 재사용 Core (\`.agentoppa/\`)
+
+> ${desc}
+>
+> 이 폴더는 **재사용 Core**다 — 워크플로우(단계 흐름·게이트) + 범용 스킬 + 훅 + 인터페이스(빈자리)를 자체완결로 담는다.
+> AgentOppa(Maker)가 이 프로젝트의 \`.harness/\`(의도·바인딩·값)를 읽어 결정적으로 빌드한 산출물이다.
+> 프로젝트 값을 본문에 안 박는 게 재사용의 비결 — 값-빈자리는 빌드 때 박히고, 능력-빈자리(\`{cap:}\`)는
+> 실행 시 \`.harness/config.yaml\`의 \`bindings\`/\`impl\`에서 읽힌다. 그래서 같은 Core를 여러 프로젝트가 *가리켜* 쓴다.
+
+## 폴더 구조
+
+\`\`\`
+.agentoppa/
+├── .claude-plugin/marketplace.json   # Claude 마켓 (source: ${source})
+├── .agents/plugins/marketplace.json  # Codex 마켓 (source.path: ${source})
+└── plugins/${core}/
+    ├── .claude-plugin/plugin.json     # Claude 메타 (컴포넌트 자동발견)
+    ├── .codex-plugin/plugin.json      # Codex 메타 + 컴포넌트 포인터
+    ├── skills/<phase>/SKILL.md         # 워크플로우 단계 스킬
+    ├── agents/<name>.md (+.toml)       # 보조 에이전트 (있으면)
+    ├── hooks/hooks.json (+.mjs)        # strict 게이트 훅 (있으면)
+    └── always-on.md                    # 행동 규칙 (루트 CLAUDE.md/AGENTS.md 가 import)
+\`\`\`
+
+## 적재 = 가리키기 (by-reference)
+
+도구가 읽는 \`.claude\`/\`.codex\`는 이 Core의 *사본이 아니라 얇은 포인터*다. 아래 중 하나로 이 Core를 물린다:
+
+- **Claude (그때그때):** \`claude --plugin-dir ${pdir}\`
+- **Claude (커밋해 항상):** \`.claude/settings.json\`에 이 마켓/플러그인을 등록(프로젝트에 커밋 → 팀 공유).
+- **Codex:** 루트 \`.agents/plugins/marketplace.json\`을 자동 감지 → \`installation: AVAILABLE\`이라 설치 후 사용.
+
+## Fallback — 플러그인 없이 떠도 행동 가드 생존
+
+이 프로젝트 루트의 \`CLAUDE.md\`/\`AGENTS.md\`가 \`plugins/${core}/always-on.md\`를 import한다.
+그래서 \`--plugin-dir\` 없이 떠도 *행동 규칙*은 살아 있다(규칙만 — 단계 스킬·게이트 같은 실행 부품은 위 적재가 필요).
+
+## 배포 옵션
+
+- **이식:** 이 \`.agentoppa/\` 폴더는 자체완결이라 통째로 다른 repo에 복사하거나 github에 올려 여러 프로젝트가 가리킬 수 있다.
+- **재빌드:** \`.harness/\`(의도·값·바인딩)를 고친 뒤 \`node <agentoppa>/plugins/agentoppa/bin/build-skills.mjs <project-root>\`로 다시 빌드(멱등 — 같은 입력→같은 산출).
+
+---
+
+*손으로 고치지 마라 — 이 폴더는 \`.harness/\`에서 결정적으로 빌드된 산출물이다. 바꿀 게 있으면 \`.harness/\`를 고치고 재빌드한다.*
 `;
 }

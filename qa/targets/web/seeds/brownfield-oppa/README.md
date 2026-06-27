@@ -1,6 +1,6 @@
 # board-service
 
-> 이 시드 = `brownfield-bare` + **AgentOppa 생성 하네스** (`case3b`/`lc1-3` 입력). 아래 "하네스 없음"은 베이스(brownfield-bare) 설명이고, 이 시드엔 `.harness/`·`.claude/`·`.codex/`가 이미 깔려 있다.
+> 이 시드 = `brownfield-bare` + **AgentOppa 생성 하네스** (`case3b`/`lc1-3` 입력). 아래 "하네스 없음"은 베이스(brownfield-bare) 설명이고, 이 시드엔 Project(`.harness/`) + 재사용 Core 묶음(`.agentoppa/`) + fallback 문서(`CLAUDE.md`·`AGENTS.md`)가 이미 깔려 있다. (적재 포인터 `.claude`/`.codex` 는 빌드가 안 만든다 — 적재 메뉴 몫.)
 
 이미 개발된 web 서비스 — **회원가입 / 로그인 / 프로필 / 게시판**. AgentOppa의 *브라운필드* QA 시드다(하네스 없음). 하네스를 여기 깔 때 **기존 컨벤션에 피팅**되는지(case2)·**원본을 안 건드리는지**(`git diff`=∅)를 본다.
 

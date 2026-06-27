@@ -45,6 +45,15 @@ const CASES = [
     green: ".agentoppa/fixtures/agent-engineer-inline-comment/green/.harness/config.yaml",
   },
   {
+    // 인터페이스 계약: requires 능력-빈자리 ↔ config.bindings/impl.
+    // green = 능력이 전부 bindings+impl 로 덮임(선택 능력은 미바인딩이어도 통과).
+    // red   = 능력 하나 미바인딩 → error 여야(ARCHITECTURE §31 미바인딩=error).
+    name: "agent-engineer/bindings — requires 능력-빈자리 미바인딩 점검",
+    validator: "plugins/agentoppa/skills/agent-engineer/scripts/validate.mjs",
+    red: ".agentoppa/fixtures/agent-engineer-bindings/red/.harness/config.yaml",
+    green: ".agentoppa/fixtures/agent-engineer-bindings/green/.harness/config.yaml",
+  },
+  {
     name: "intent-interview — 차단 미해결인데 status=ready 점검",
     validator: "plugins/agentoppa/skills/intent-interview/scripts/validate.mjs",
     red: ".agentoppa/fixtures/intent-interview/red/.harness/intent.md",

@@ -1,0 +1,15 @@
+# 프로젝트 B — 프로젝트 A 와 *같은* 재사용 Core 'demo-core' 를 가리킨다 (워크플로우 동일: spec → e2e).
+#   이 프로젝트의 선택: 단위 러너 = node --test, e2e 능력 = node-driver (다른 구현).
+core:     demo-core
+feature:  api
+sync:     medium
+routing:  balanced
+phases:
+  - spec
+  - e2e
+values:
+  test_command: "node --test"         # 값-빈자리: A 와 다른 단위 러너
+bindings:
+  e2e-runner: node-driver             # 능력-빈자리 → A 와 다른 구현 키
+impl:
+  node-driver: "node e2e/run.mjs"     # 구현 키 → 실제 명령 (playwright 아님)

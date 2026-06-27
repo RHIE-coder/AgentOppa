@@ -10,7 +10,7 @@
 
 ## 정체성 (확정)
 
-**AgentOppa = Maker.** 안 돌린다, **만든다.** 산출물 = **Core Layer + Project Layer + Config** (SOURCE `.harness/` → COMPILED `plugins/<harness>/` 공유트리 + 루트 마켓).
+**AgentOppa = Maker.** 안 돌린다, **만든다.** 산출물 = 유저가 만드는 **재사용 Core(`.agentoppa/` 프레임워크) + Project(`.harness/` 구현·바인딩)** — 도구는 *가리켜서* 적재(`.claude`/`.codex` = 얇은 포인터). (모델 정정 상세: §다음 1.)
 → 개념 모델 상세는 **`ARCHITECTURE.md`**. 이 문서는 *현황·계획*만.
 
 ## 원칙·베팅 (확정)
@@ -38,8 +38,28 @@
 
 ## 다음 (남은 일)
 
-### 1. 재사용 플러그인 빌드  (target 무관)
-Core Layer(프로젝트 무관 재사용 배관)를 독립 플러그인으로 빌드·산출. 라이브 e2e 완료로 선행조건 다 풀림.
+### 1. 재사용 Core 모델로 재설계  *(2026-06-27 합의 · 옛 "재사용 플러그인 빌드"를 정정·구체화)*
+
+> **정정 배경:** 옛 모델은 Core=재사용 배관(validate.mjs)·워크플로우=프로젝트별 일회용(`project/phases/`)이라 유저 비전과 **반대**였다(워크플로우는 Core여야). 아래가 합의된 올바른 모델 — 위 "완료"의 Maker 모델·ARCHITECTURE·AGENTS는 이걸로 재작업된다(0단계).
+
+**정체성:** Maker(이 repo)는 *아무것도 안 싣는다.* 유저가 Maker로 **자기만의 재사용 Core 프레임워크**를 만들어 여러 프로젝트에 *가리켜서* 쓴다.
+
+**두 층(유저 프로젝트 안):**
+- **Core** = 재사용 프레임워크 = `.agentoppa/`(자체완결 묶음: `.agents`+`.claude-plugin`+`plugins`, AgentOppa 자신과 같은 패키징 → github·복붙 이식). 워크플로우+범용 스킬+훅+**인터페이스(빈자리)**. **프로젝트 값을 안 박는다** → 그래서 재사용됨.
+- **Project** = 구현·바인딩 = `.harness/`(intent + 어떤 Core + bindings + 구현 모듈).
+
+**인터페이스↔구현:** Core 단계가 `requires:[e2e-runner]`(능력 빈자리) 선언 → Project가 `bindings:{e2e-runner: playwright}`+구현으로 채움 → Core 스킬은 그 값을 **런타임에 `.harness/`에서 읽음**(컴파일 때 안 박음) → validator가 미바인딩을 error.
+
+**적재 = 가리키기(by-reference):** `.claude`/`.codex` = 얇은 포인터(Core 사본 없음). 메뉴 = `--plugin-dir` / marketplace install / 커밋 `.claude/settings.json`(Claude) · 루트 `.agents` 자동감지(Codex).
+
+**Fallback+문서:** 생성 프로젝트의 `CLAUDE.md`/`AGENTS.md`가 Core *규칙*을 import → 플러그인 없이 떠도 행동 가드 생존(규칙만, 실행 부품 아님). `.agentoppa/README.md` = 연동 명령+폴더 목적+배포 옵션. (= 이 repo의 always-on 브리지 패턴을 생성물에도.)
+
+**작업 분해(순서):**
+0. **개념·불변식 재작성** — `ARCHITECTURE.md` §2(Core=프레임워크/Project=구현), `AGENTS.md`("콘텐츠 안 싣음" 유지 + "재사용 Core 워크플로우는 1급" 신설). *먼저.*
+1. 인터페이스 스키마 — `agent-engineer/references/phases.md`에 `requires`/`bindings`, `recipe.md` config에 `core:`/`bindings:`.
+2. Maker 스킬 두 모드 — agent-engineer: "Core 짓기" vs "프로젝트 바인딩"; intent-interview: 프레임워크 면담 분기.
+3. 빌드 — `build-skills.mjs`: Core를 `.agentoppa/` 묶음으로 산출 + 런타임 읽기로 전환 + CLAUDE/AGENTS fallback 배선 + `.agentoppa/README.md` emit + 미바인딩 검사.
+4. QA — "같은 Core, 두 구현(예: go test vs npm test) 주입" 케이스 = 비전 증명.
 
 ### 2. 가치(L4) 측정 — 메커니즘 너머
 "하네스가 작업을 실제로 더 낫게/확실하게 하나"를 *측정*. baseline A/B(하네스 유/무 동일 작업) + 프로파일러 실측(🧠모델사고/🙋유저대기/⚙️하네스) 다회(n>1). 지금까진 메커니즘만 증명.

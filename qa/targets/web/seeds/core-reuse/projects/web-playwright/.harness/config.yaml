@@ -1,0 +1,15 @@
+# 프로젝트 A — 같은 재사용 Core 'demo-core' 를 가리킨다 (워크플로우 동일: spec → e2e).
+#   이 프로젝트의 선택: 단위 러너 = npm test, e2e 능력 = playwright.
+core:     demo-core
+feature:  web
+sync:     medium
+routing:  balanced
+phases:
+  - spec
+  - e2e
+values:
+  test_command: "npm test"            # 값-빈자리: 이 프로젝트의 단위 러너
+bindings:
+  e2e-runner: playwright              # 능력-빈자리 → 이 프로젝트의 구현 키
+impl:
+  playwright: "npx playwright test"   # 구현 키 → 실제 명령

@@ -50,18 +50,19 @@ function allCases() {
 const findCase = (id) => allCases().find((k) => k.id === id) ?? die(`알 수 없는 케이스: ${id} (node qa/run.mjs list)`);
 const git = (cwd, ...args) => spawnSync("git", args, { cwd, encoding: "utf8" });
 
-// 통일 플러그인 모델: AgentOppa 가 추가하는 경로 = SOURCE(.harness) + 컴파일 플러그인(plugins/) + 루트 마켓(.claude-plugin·.agents) (+레거시 .codex-plugin).
-const HARNESS = [".harness", "plugins", ".claude-plugin", ".codex-plugin", ".agents"];
+// 재사용 Core 모델: AgentOppa 가 추가하는 경로 = Project(.harness) + Core 묶음(.agentoppa: 마켓 2개 + plugins/<core>/) +
+//   루트 fallback 문서(CLAUDE.md·AGENTS.md, Core 규칙 import). 적재 포인터 .claude/.codex 는 빌드가 안 만든다(적재 메뉴 몫).
+const HARNESS = [".harness", ".agentoppa", "CLAUDE.md", "AGENTS.md", ".claude", ".codex"];
 const isHarness = (p) => HARNESS.some((h) => p === h || p.startsWith(h + "/"));
 
 // --- 판정들 (기계화된 것만; 나머지는 judge() 가 '?' 수동 표시) ---
 const JUDGES = {
   harness_present(work) {
-    const REQUIRED = [".harness", "plugins"]; // SOURCE + COMPILED 플러그인
+    const REQUIRED = [".harness", ".agentoppa"]; // Project(.harness) + 재사용 Core 묶음(.agentoppa)
     const missing = REQUIRED.filter((h) => !existsSync(join(work, h)));
     return missing.length
-      ? { ok: false, msg: `하네스 산출 누락: ${missing.join(", ")} (compile 안 됨?)` }
-      : { ok: true, msg: "하네스 .harness/(SOURCE) + plugins/(COMPILED) 존재" };
+      ? { ok: false, msg: `하네스 산출 누락: ${missing.join(", ")} (build-skills 안 돎?)` }
+      : { ok: true, msg: "하네스 .harness/(Project) + .agentoppa/(재사용 Core 묶음) 존재" };
   },
   project_unchanged(work) {
     // seed 원본(tracked) 파일이 수정/삭제되지 않았는가 — 하네스 경로 추가만 허용
@@ -72,11 +73,14 @@ const JUDGES = {
       : { ok: true, msg: "프로젝트 원본 무손상 (하네스 경로만 추가)" };
   },
   compiled_idempotent(work) {
-    // 호출 전제: 직전 generate 결과를 커밋해 두고 → generate 재실행 → 이 판정.
-    const d = git(work, "diff", "--name-only", "--", "plugins", ".claude-plugin", ".agents").stdout.trim();
+    // 호출 전제: 직전 build-skills 결과를 커밋해 두고 → build-skills 재실행 → 이 판정.
+    //   빌드 산출은 전부 Core 묶음 .agentoppa/ 안 (마켓 2개 + plugins/<core>/) → 거기 diff=∅ 이면 멱등.
+    // status --porcelain: tracked diff + 미추적 신규(??) + 삭제 모두 잡는다.
+    //   (diff --name-only 는 미추적 신규 파일을 놓쳐, 재생성이 새 파일을 흘려도 멱등으로 거짓통과했다.)
+    const d = git(work, "status", "--porcelain", "--", ".agentoppa").stdout.trim();
     return d
-      ? { ok: false, msg: `재생성이 COMPILED 를 바꿈(멱등 실패):\n      ${d.split("\n").join("\n      ")}` }
-      : { ok: true, msg: "재생성 멱등 — plugins/·루트 마켓 diff 없음" };
+      ? { ok: false, msg: `재생성이 Core 묶음을 바꿈(멱등 실패):\n      ${d.split("\n").join("\n      ")}` }
+      : { ok: true, msg: "재생성 멱등 — .agentoppa/ 변화 없음" };
   },
   acceptance(work, kase) {
     if (!kase.acceptance) return { ok: false, msg: "case.md 에 acceptance 명령 미정의" };
@@ -163,19 +167,19 @@ const JUDGES = {
   },
 
   source_edits_preserved(work) {
-    // 컴파일러는 .harness SOURCE(저작물)를 건드리지 않는다 — 재생성 후에도 config·intent·phases 가 그대로(수기편집 보존).
+    // build-skills 는 Project(.harness) 저작물을 읽기만 한다 — 재생성 후에도 config·intent·phases 가 그대로(수기편집 보존).
     const d = git(work, "diff", "--name-only", "--", ".harness/config.yaml", ".harness/intent.md", ".harness/project").stdout.trim();
     return d
-      ? { ok: false, msg: `재생성이 SOURCE 저작물을 바꿈(수기편집 유실 위험):\n      ${d.split("\n").join("\n      ")}` }
-      : { ok: true, msg: "SOURCE 저작물(config·intent·phases) 무변 — 컴파일러가 안 건드림" };
+      ? { ok: false, msg: `재생성이 Project 저작물을 바꿈(수기편집 유실 위험):\n      ${d.split("\n").join("\n      ")}` }
+      : { ok: true, msg: "Project 저작물(config·intent·phases) 무변 — build-skills 가 안 건드림" };
   },
 
   intent_reflected(work) {
     // config.yaml 의 phase 들이 컴파일된 스킬로 1:1 반영됐는가 (의도→산출 반영의 기계 근사).
     const phases = readPhaseOrder(work);
     if (!phases.length) return { ok: false, msg: "config.yaml 에 phases 없음" };
-    const pluginsDir = join(work, "plugins");
-    if (!existsSync(pluginsDir)) return { ok: false, msg: "plugins/ 없음 (compile 안 됨)" };
+    const pluginsDir = join(work, ".agentoppa", "plugins");   // Core 묶음 안 (재사용 Core 모델)
+    if (!existsSync(pluginsDir)) return { ok: false, msg: ".agentoppa/plugins/ 없음 (build-skills 안 돎?)" };
     const skillDirs = new Set();
     for (const h of readdirSync(pluginsDir).filter((d) => statSync(join(pluginsDir, d)).isDirectory())) {
       const sdir = join(pluginsDir, h, "skills");
@@ -187,7 +191,66 @@ const JUDGES = {
       ? { ok: false, msg: `config phase ↔ 컴파일 스킬 불일치 — 누락:[${missing}] 잉여:[${extra}]` }
       : { ok: true, msg: `config phase ${phases.length}개 전부 스킬로 반영 (의도↔산출 일치)` };
   },
+
+  core_reuse(work, kase) {
+    // 비전 증명(새 모델 = 복사 말고 *가리켜* 재사용): 같은 재사용 Core 묶음 하나를 ≥2개 프로젝트가
+    //   core:<name> 로 가리키되, 각자 config.yaml 의 values·bindings 만 다르다 → 둘 다 통과.
+    //   판정 본체 = Core 가 쓰는 바로 그 agent-engineer validator(spawn — qa 가 plugins 를 import 하지 않음).
+    //   1) 복사 0 — 어느 프로젝트도 project/phases/ 사본을 안 든다(들면 "가리켜 재사용"이 아니라 복사).
+    //   2) 단일소스 — 셋이 가리키는 Core phase 소스가 *한 벌*(공유 묶음 .agentoppa/plugins/<core>/phases/) 뿐.
+    //      그래서 그 한 파일을 고치면 N개 프로젝트에 반영된다(이 케이스가 그 단일성을 못박는다).
+    //   3) 둘 다 green — 다른 바인딩이어도 같은 Core 가 돈다(validator exit 0).
+    const projects = arr(kase.projects);
+    if (projects.length < 2) return { ok: false, msg: "case.md 에 projects:[A,B] (≥2) 미정의" };
+    // 1) 복사 0: 프로젝트가 phase 소스를 직접 들면 안 된다(가리켜 재사용 ≠ 복사).
+    const copiers = projects.filter((p) => existsSync(join(work, "projects", p, ".harness", "project", "phases")));
+    if (copiers.length) return { ok: false, msg: `프로젝트가 phase 를 *복사*해 듦(가리켜 재사용 아님): ${copiers.join(", ")}` };
+    // 2) 단일소스: 공유 Core 묶음의 phase-소스 디렉터리가 정확히 하나여야(복붙된 묶음이 아님).
+    const bundleDirs = findAgentoppaPhaseDirs(work);
+    if (bundleDirs.length === 0) return { ok: false, msg: "Core 묶음 phase 소스(.agentoppa/plugins/<core>/phases/) 없음 — 가리킬 단일본이 없음" };
+    if (bundleDirs.length > 1) return { ok: false, msg: `Core phase 소스가 ${bundleDirs.length}곳 — 단일소스 아님(복사):\n      ${bundleDirs.map(rel).join("\n      ")}` };
+    // 3) 각 프로젝트 config 가 agent-engineer validator green 인가(공유 묶음 소스를 가리켜 검사).
+    const reds = [];
+    for (const p of projects) {
+      const r = runAgentEngineer(join(work, "projects", p, ".harness", "config.yaml"));
+      if (r.status !== 0) reds.push(`${p}(exit ${r.status})`);
+    }
+    return reds.length
+      ? { ok: false, msg: `같은 Core 인데 일부 프로젝트가 red: ${reds.join(", ")} — "구현만 다름, 둘 다 통과" 주장 붕괴` }
+      : { ok: true, msg: `단일 Core 소스 한 벌(${rel(bundleDirs[0])}) 을 ${projects.length}개 프로젝트가 가리켜 재사용(복사 0) · 다른 바인딩 모두 green` };
+  },
+
+  unbound_errors(work, kase) {
+    // 음성 증명: 능력-빈자리를 안 채운 프로젝트는 validator 가 error(exit≠0) 로 막아야 한다.
+    const p = kase.unbound;
+    if (!p) return { ok: false, msg: "case.md 에 unbound: <프로젝트> 미정의" };
+    const cfg = join(work, "projects", p, ".harness", "config.yaml");
+    if (!existsSync(cfg)) return { ok: false, msg: `음성 프로젝트 config 없음: ${rel(cfg)}` };
+    const r = runAgentEngineer(cfg);
+    return r.status !== 0
+      ? { ok: true, msg: `미바인딩 게이트 작동 — '${p}' validator error(exit ${r.status})` }
+      : { ok: false, msg: `게이트 실패 — '${p}' 가 능력 미바인딩인데 validator 통과(green) 함` };
+  },
 };
+
+// Core 가 쓰는 agent-engineer validator 를 spawn 으로 부른다 (qa→plugins import 아님 — 결합 최소).
+function runAgentEngineer(cfgPath) {
+  const validator = join(ROOT, "plugins/agentoppa/skills/agent-engineer/scripts/validate.mjs");
+  return spawnSync(process.execPath, [validator, cfgPath], { encoding: "utf8" });
+}
+// work 트리에서 Core 묶음의 phase-소스 디렉터리(.agentoppa/plugins/<core>/phases/) 들을 모은다.
+//   단일소스 증명: 정확히 한 곳이어야 "복사 말고 가리켜 재사용"(여러 프로젝트가 같은 한 파일을 가리킴).
+//   두 곳 이상이면 묶음이 복붙된 것 = 단일소스 깨짐.
+function findAgentoppaPhaseDirs(work) {
+  const out = [];
+  const pluginsRoot = join(work, ".agentoppa", "plugins");
+  if (!existsSync(pluginsRoot)) return out;
+  for (const core of readdirSync(pluginsRoot)) {
+    const ph = join(pluginsRoot, core, "phases");
+    if (existsSync(ph) && statSync(ph).isDirectory()) out.push(ph);
+  }
+  return out;
+}
 
 // baseline(HEAD) 시점의 JSON 파일을 읽는다 (없으면 undefined). git show 로 — 워킹트리 변경과 무관.
 function parseGitJson(work, path) {

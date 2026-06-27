@@ -1,0 +1,12 @@
+# 음성 케이스 — 같은 Core 'demo-core' 를 가리키지만 e2e 의 능력-빈자리 'e2e-runner' 를 *안 채웠다*.
+#   기대: agent-engineer validator 가 미바인딩을 error 로 떨어뜨린다 (exit≠0). 빈자리는 침묵으로 새면 안 된다.
+core:     demo-core
+feature:  broken
+sync:     medium
+routing:  balanced
+phases:
+  - spec
+  - e2e
+values:
+  test_command: "npm test"
+# bindings 없음 → e2e 의 'e2e-runner:capability' 미바인딩 → error 여야 한다.

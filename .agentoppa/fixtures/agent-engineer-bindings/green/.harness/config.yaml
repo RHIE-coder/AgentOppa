@@ -1,0 +1,15 @@
+harness:  bindings-green
+core:     demo-core
+feature:  demo
+sync:     medium
+routing:  balanced
+phases:
+  - spec
+  - e2e
+values:
+  test_command: "npm test"
+bindings:
+  e2e-runner: playwright          # impl 키 'playwright' 를 가리킴
+  # browser 는 선택(?) 이라 안 꽂아도 통과
+impl:
+  playwright: "npx playwright test"

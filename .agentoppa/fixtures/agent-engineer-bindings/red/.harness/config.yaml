@@ -1,0 +1,11 @@
+harness:  bindings-red
+core:     demo-core
+feature:  demo
+sync:     medium
+routing:  balanced
+phases:
+  - spec
+  - e2e
+values:
+  test_command: "npm test"
+# bindings 없음 → e2e 의 능력-빈자리 'e2e-runner' 가 미바인딩 → error 여야 한다.

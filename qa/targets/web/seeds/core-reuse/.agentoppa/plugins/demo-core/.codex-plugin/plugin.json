@@ -1,0 +1,9 @@
+{
+  "name": "demo-core",
+  "version": "0.1.0",
+  "description": "demo-core Core (AgentOppa 빌드).",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "demo-core"
+  }
+}

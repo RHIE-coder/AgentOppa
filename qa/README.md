@@ -1,11 +1,13 @@
 # qa/ — AgentOppa 라이브 e2e QA (상시·in-repo·격리)
 
-> AgentOppa가 *만든* 하네스가 진짜 도는지 증명하는 **상시 QA 타깃**. 검사기 red/green 픽스처(`.agentoppa/fixtures/`, 초소형)와 달리, 여기엔 하네스가 *물고 도는 진짜 미니 프로젝트*(시드)가 산다.
+> AgentOppa가 *만든* 재사용 Core 하네스가 진짜 도는지 증명하는 **상시 QA 타깃**. 검사기 red/green 픽스처(`.agentoppa/fixtures/`, 초소형)와 달리, 여기엔 하네스가 *물고 도는 진짜 미니 프로젝트*(시드)가 산다.
+>
+> 모델(P0 잠금): 유저 프로젝트 = **Project(`.harness/`: intent + config{core·bindings·values} + 구현)** + **재사용 Core(`.agentoppa/`: 마켓 2개 + `plugins/<core>/` 워크플로우·스킬·훅)**. 도구는 `.claude`/`.codex` 얇은 포인터로 Core 를 *가리켜* 적재. 빌드 = `plugins/agentoppa/bin/build-skills.mjs` (Project → Core 묶음).
 
 ## 이게 뭔가 / 뭐가 아닌가
 
 - **대상(test subject)이다** — 프레임워크도 `examples/`도 아니다. 컴파일러 repo가 테스트용 샘플 프로그램을 싣는 것과 같다.
-- **한방향 의존:** 엔진(`plugins/`)은 이 트리를 **절대 참조하지 않는다.** 이 트리를 통째로 지워도 프레임워크는 멀쩡해야 한다. → `check-no-qa-ref` + `npm test`가 기계 강제.
+- **한방향 의존:** 엔진(`plugins/agentoppa/`)은 이 트리를 **절대 참조하지 않는다.** 이 트리를 통째로 지워도 프레임워크는 멀쩡해야 한다. → `check-no-qa-ref` + `npm test`가 기계 강제.
 - **반대 방향(qa→plugins)** 은 허용(샘플→프레임워크)이나, `run.mjs`는 결합을 줄이려 자족적으로 둔다(자체 frontmatter 파서).
 
 ## 구조
@@ -17,8 +19,10 @@ qa/
 ├── targets/web/
 │   ├── seeds/                커밋된 *시작상태* 픽스처 (pristine · 최소 · 읽기전용 입력)
 │   │   ├── greenfield/         거의 빈 진짜 web (/health) — [case1]
-│   │   └── brownfield-bare/    개발된 web: login/signup/profile/board, 하네스 없음 — [case2 등]
-│   │   ·                       (brownfield-foreign / -oppa 시드는 첫 generate 이후 파생 — 아직 없음)
+│   │   ├── brownfield-bare/    개발된 web: login/signup/profile/board, 하네스 없음 — [case2 등]
+│   │   ├── brownfield-foreign/ brownfield-bare + 남이 만든 외래 하네스(.myflow) — [case3a]
+│   │   ├── brownfield-oppa/    brownfield-bare + AgentOppa 생성 하네스(.harness + .agentoppa) — [case3b·lc*]
+│   │   └── core-reuse/         같은 재사용 Core 를 두 프로젝트가 다른 구현으로 바인딩 — [vp1] (자족형)
 │   └── cases/<id>/case.md    케이스별 명세 + 판정 (frontmatter = 기계 데이터)
 ├── .work/    (gitignored)    실제 실행 scratch — seed 복사본 + 자체 .git(diff 판정용)
 └── results/  (gitignored)    run 리포트 + 프로파일러 실측(🧠/🙋/⚙️)
@@ -32,12 +36,13 @@ qa/
 |---|---|---|---|
 | `greenfield` | 빈 새 프로젝트 | 코드 거의 없음 · 하네스 없음 | 있음 (`/health` 하나) |
 | `brownfield-bare` | 이미 개발된 프로젝트 | 코드 있음 · 하네스 없음 | 있음 (login/signup/profile/board) |
-| `brownfield-foreign` | 개발됨 + *남이 만든* 하네스 | 코드 있음 · 외래 하네스 | 파생 예정 |
-| `brownfield-oppa` | 개발됨 + *AgentOppa가 만든* 하네스 | 코드 있음 · 자기 하네스 | 파생 예정 |
+| `brownfield-foreign` | 개발됨 + *남이 만든* 하네스 | 코드 있음 · 외래 하네스(`.myflow`) | 있음 |
+| `brownfield-oppa` | 개발됨 + *AgentOppa가 만든* 하네스 | 코드 있음 · Project(`.harness`) + Core(`.agentoppa`) | 있음 |
+| `core-reuse` | 같은 Core, 두 프로젝트 다른 바인딩 | 코드 없음 · Core 1 + Project 3(2 green·1 음성) | 있음 (자족형) |
 
-> greenfield(빈 땅) ↔ brownfield(이미 지은 땅)는 업계 표준어. bare=하네스 없음 · foreign=남의 하네스 · oppa=우리 하네스.
+> greenfield(빈 땅) ↔ brownfield(이미 지은 땅)는 업계 표준어. bare=하네스 없음 · foreign=남의 하네스 · oppa=우리 하네스. core-reuse=재사용 증명 전용(코드 없는 구조 픽스처).
 
-## 케이스 사전 — 11개가 뭔지 (ID 읽는 법: 앞=축, 뒤=순번)
+## 케이스 사전 — 12개가 뭔지 (ID 읽는 법: 앞=축, 뒤=순번)
 
 | ID | 평문 이름 | 무엇을 증명하나 | 시드 |
 |---|---|---|---|
@@ -52,8 +57,9 @@ qa/
 | **lc3**-removal | 하네스 제거 | 떼어내면 프로젝트 원본 멀쩡하나 | brownfield-oppa |
 | **rb1**-resume | 중단→재개 (rb=견고성) | 중간에 끊겨도 커밋된 문서에서 이어지나 | brownfield-bare |
 | **rb2**-bad-intent | 나쁜 의도 게이팅 | 모순된 요구는 "준비됨"으로 안 넘기고 막나 | brownfield-bare |
+| **vp1**-core-reuse | 같은 Core, 다른 바인딩 (vp=비전증명) | *재사용 Core = 워크플로우 동일, 구현만 다름*을 증명 | core-reuse |
 
-> 축 약어: **case**=도입(adoption) · **op**=운영(operation) · **xt**=크로스툴(cross-tool) · **lc**=생애주기(lifecycle) · **rb**=견고성(robustness). 절차·판정 상세는 각 `cases/<id>/case.md`.
+> 축 약어: **case**=도입(adoption) · **op**=운영(operation) · **xt**=크로스툴(cross-tool) · **lc**=생애주기(lifecycle) · **rb**=견고성(robustness) · **vp**=비전증명(vision-proof). 절차·판정 상세는 각 `cases/<id>/case.md`.
 
 ## 검증 모델 — 왜 이 테스트들이 유효한가 (근거)
 
@@ -83,6 +89,7 @@ node qa/run.mjs judge <caseId>       # 사후 판정 (diff·합격테스트·존
 ### 정직한 자동화 경계
 
 러너가 **보장하는 것**: 셋업(seed→scratch+baseline)과 *사후* 기계 판정. **agent 단계(면담/생성/실행)** 는 대화형/헤드리스 세션이 따로 몬다 — 첫 바퀴는 손으로 몰 수도 있다. "전자동 버튼"은 과대선언이라 두지 않는다.
+예외: `vp1`(비전 증명)은 시드 자체가 완성된 두 바인딩이라 **agent 단계 없이** 셋업 직후 바로 judge — 자족형.
 
-기계화된 판정: `harness_present` · `project_unchanged` · `compiled_idempotent` · `acceptance`.
-아직 수동(추후 기계화): `contract` · `fits_existing_runner` · `intent_reflected` · `resume_equivalent` · `interview_gated` 등 — 러너가 `?`로 표시한다.
+기계화된 판정(JUDGES): `harness_present` · `project_unchanged` · `compiled_idempotent` · `acceptance` · `fits_existing_runner` · `foreign_harness_preserved` · `interview_gated` · `contract` · `source_edits_preserved` · `intent_reflected` · `core_reuse` · `unbound_errors`.
+아직 수동: `resume_equivalent` 만 — 중단본≡무중단본 2-run 동등성이라 단일 판정 불가(러너가 `?`로 표시). (완결성 자체는 `contract`+`acceptance`로 기계화됨.)

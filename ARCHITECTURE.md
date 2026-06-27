@@ -8,31 +8,33 @@
 안 돌린다, **만든다.** Claude Code·Codex 양쪽에서, 어느 OS에서든 똑같이 도는 **하네스**(harness = 에이전트가 작업을 확실히 해내게 잡아주는 골격)를 짓는 공장.
 → 컴파일러·`create-react-app` 류. **런타임 프레임워크(React 같은)가 아니다.**
 
-## 2. 무엇을 만드나 — Core Layer + Project Layer + Config
+## 2. 무엇을 만드나 — Core(재사용 프레임워크) + Project(구현)
 
-생성물의 형식. 그리고 **SOURCE → COMPILED** (= src/dist):
+AgentOppa(Maker)는 **아무것도 안 싣는다.** 유저가 Maker로 **자기만의 재사용 하네스 프레임워크**를 만들고, 여러 프로젝트가 그걸 *가리켜서* 쓴다. 한 유저 프로젝트는 이렇게 생긴다:
 
 ```
-.harness/                 ← SOURCE (사람이 손대는 진실 · git 커밋)
-├── config.yaml           ·  Config: 배선(켤 Core·phase 순서·게이트·라우팅) + 프로젝트 값(values)
-├── intent.md             ·  설계 의도 (왜 이 하네스)
-├── core/                 ·  Core Layer: 재사용 배관 (validate.mjs 등). 거의 고정
-├── project/
-│   ├── phases/<name>.md  ·  Project Layer: 이 프로젝트 phase   (→ 스킬로 컴파일)
-│   └── agents/<name>.md  ·  이 프로젝트 보조 에이전트          (→ 에이전트로 컴파일, .md→.toml)
-└── artifacts/<feature>/  ·  런타임 산출물 + lock.json
-
-plugins/<harness>/        ← COMPILED 플러그인 (컴포넌트 공유 한 트리 · git 커밋)
-├── skills/<phase>/        ·  컴파일된 스킬 (Claude 자동발견 · Codex는 매니페스트 포인터)
-├── agents/ · hooks/       ·  공유 컴포넌트 (.md + 빌드된 .toml 등)
-└── .claude-plugin/plugin.json · .codex-plugin/plugin.json   ·  두 매니페스트(메타·포인터)
-.claude-plugin/marketplace.json · .agents/plugins/marketplace.json  ← 루트 마켓(도구별 어댑터)
+유저 프로젝트/
+├── .agentoppa/             ← Core Layer = 재사용 프레임워크 (유저가 만들고 소유 · 이식 가능)
+│   ├── .claude-plugin/ .agents/   ·  두 마켓 (AgentOppa 자신과 같은 패키징 → github·복붙)
+│   └── plugins/<core>/            ·  워크플로우(단계 흐름·게이트) + 범용 스킬·훅 + 인터페이스(빈자리) + 검사기
+├── .harness/               ← Project Layer = 이 프로젝트의 구현·바인딩
+│   ├── intent.md                  ·  이 프로젝트 의도
+│   ├── config.yaml                ·  core: 어떤 Core + bindings(능력→구현) + values
+│   └── project/                   ·  구현 모듈(예: playwright) · 이 프로젝트 보조 에이전트
+├── CLAUDE.md · AGENTS.md   ← Core 규칙 import (fallback: 플러그인 없이 떠도 행동 가드 생존)
+└── .claude/ .codex/        ← 얇은 포인터 (`.agentoppa/`의 Core를 가리켜 적재 · Core 사본 아님)
 ```
+*(Core 내부와 `.harness/`의 세부 파일 배치는 인터페이스 스키마·빌드 단계(ROADMAP §다음 1·3)에서 확정.)*
 
-- 유저는 `.harness/`만 손대고 → AgentOppa가 `plugins/<harness>/`(공유 컴포넌트 트리 + 두 매니페스트) + 루트 마켓으로 **컴파일** — **AgentOppa 자신과 같은 플러그인 모델**(컴포넌트는 한 트리 공유, 도구별로 갈리는 건 매니페스트·마켓뿐. `.claude/`·`.codex/` 복제가 아니다).
-- 컴파일 결과는 경로·슬롯이 다 박혀서 **AgentOppa 없이도 돈다**(독립). 그래서 둘 다 커밋.
+**왜 두 층인가 — 재사용의 비결은 "값을 안 박는 것":**
+- **Core**는 프로젝트 값(`{test_command}`·`{e2e-runner}`)을 *굳히지 않는다.* 단계가 `requires:[e2e-runner]`로 **빈자리**만 선언하고, 그 값은 **실행 시점에 `.harness/`에서 읽는다**(상주 실행기가 아니라 스킬이 제 설정파일을 읽는 것 — §3과 무관). 그래서 Core는 web·mobile·go 어디든 통째로 옮겨도 돈다.
+- **Project**는 그 빈자리를 *이 프로젝트 구현*으로 채운다 — `bindings:{e2e-runner: playwright}` + 구현 모듈. 프로젝트 차이는 전부 여기에만. (미바인딩 빈자리는 Core 검사기가 error로.)
 
-> ⚠ **이름 주의:** "Maker 엔진"(AgentOppa의 *만드는 능력*) ≠ "Core Layer"(생성물 안의 *재사용 배관*). 둘 다 "core"라 부르면 꼬인다. (옛 README의 "Core Harness Layer / Project Harness Layer" 표현은 이 모델로 대체 예정.)
+**도구는 어떻게 적재하나 — 가리키기(by-reference):**
+- 도구가 실제로 읽는 `.claude`/`.codex`는 **Core 사본이 아니라 얇은 포인터**다. 적재 메뉴: `--plugin-dir` · marketplace install · 커밋한 `.claude/settings.json`(Claude) · 마켓 자동감지(Codex). 정확한 포인터 배선(특히 Codex)은 빌드 단계에서 확정. → `.agentoppa/`의 Core는 한 벌로 깨끗이 남고(복제 없음) 이식이 공짜.
+- **Fallback:** 프로젝트의 `CLAUDE.md`/`AGENTS.md`가 Core의 *규칙*을 import → 플러그인을 안 실어도 행동 가드는 산다(**규칙만**; 단계 스킬·게이트 같은 실행 부품은 플러그인 적재가 필요). = 이 repo가 자기한테 쓰는 always-on 브리지 패턴(§7)을 생성물에도.
+
+> ⚠ **이름 주의:** **Maker**(이 repo · 공장 — ccc-* 부품으로 *짓는 능력*) ≠ **Core**(유저가 *만든* 재사용 프레임워크). AgentOppa는 Core를 짓지만 Core를 *싣지는* 않는다.
 
 ## 3. 런타임 엔진 안 둔다 (핵심 베팅)
 

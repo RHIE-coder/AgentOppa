@@ -13,6 +13,6 @@ tools: [claude]
 **판정:** `project_unchanged` = 기계.
 
 ## 절차
-1. `setup`(하네스 포함 baseline) → 2. 하네스 경로(.harness/.claude/.codex) 제거 → 3. `judge`.
+1. `setup`(하네스 포함 baseline) → 2. 하네스 경로(`.harness/` · `.agentoppa/` · 루트 `CLAUDE.md`/`AGENTS.md` import 줄 · 적재 포인터 `.claude`/`.codex`) 제거 → 3. `judge`.
 
 > 제거 후 status 는 *삭제된 하네스 경로*만 보여야 하고 프로젝트 원본은 clean. (현재 판정은 하네스 외 변경 0을 본다.)

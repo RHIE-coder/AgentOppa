@@ -1,0 +1,13 @@
+{
+  "name": "demo-core",
+  "owner": {
+    "name": "AgentOppa"
+  },
+  "plugins": [
+    {
+      "name": "demo-core",
+      "source": "./plugins/demo-core",
+      "description": "demo-core Core (AgentOppa 빌드)."
+    }
+  ]
+}

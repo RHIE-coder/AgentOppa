@@ -2,6 +2,11 @@
 
 phase는 **문서(산출물)로 이어진다.** 앞 phase가 남긴 문서를 뒤 phase가 받는다 — 그 문서가 바통이자, *엔진 없이 도는 상태(state)*다. 이 파일은 규칙 4개를 정의한다. phase 양식은 `phases.md`, 순서·옵션은 `recipe.md`.
 
+> **두 계약은 다른 층이다 — 섞지 말 것.**
+> - **산출물 계약(이 파일)** = *phase끼리* 문서 바통을 잇는 선. `produces`/`consumes` role을 앞뒤 phase가 주고받는다(시간축: 앞→뒤).
+> - **인터페이스 계약** = *Core 빈자리 ↔ Project 구현*을 잇는 선. phase의 `requires` 능력-빈자리를 프로젝트 `config.bindings`가 채운다(층축: 재사용 Core → 이 프로젝트). 양식은 `recipe.md`(`bindings`/`impl`)·`phases.md`(`requires`/`{cap:}`).
+> - 헷갈림 방지: `consumes`는 *앞 단계가 만든 문서*를, `requires`는 *프로젝트가 주입할 값·능력*을 가리킨다. 같은 "필요"라도 채우는 주체가 다르다(앞 phase vs config). 아래 §4는 두 층을 한 번에 점검한다.
+
 ## 1. 역할 → 경로
 
 phase는 산출물을 **역할(role)**로 부른다(`{spec}`). 실제 경로는 컴파일 때 풀린다:
@@ -45,6 +50,8 @@ inputs: [requirements]  # 내가 먹은 역할들 (없으면 [])
 - [ ] 모든 비선택 `consumes` 역할이 **앞 phase의 `produces`에 존재** (dangling 입력 ❌)
 - [ ] 모든 `produces`는 뒤에서 소비되거나 종착 (orphan 출력은 warn)
 - [ ] 한 역할은 한 phase만 produces (중복 ❌)
+- [ ] 모든 비선택 `requires` 값-빈자리가 `config.values`에 존재 (`needs` 옛 이름 포함)
+- [ ] 모든 비선택 `requires` 능력-빈자리가 `config.bindings`에 존재 (미바인딩 ❌ = error), 구현 키는 `config.impl`에 알맹이 존재 (인터페이스 계약 층)
 - [ ] stale 산출물 없음 (§3)
 - [ ] (`sync=strict`) `gate` 미충족(`status≠ready`)인 채 다음으로 넘어간 곳 없음
 

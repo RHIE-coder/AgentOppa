@@ -10,7 +10,7 @@ tools: [claude]
 # case1-greenfield — 제로 프로젝트에 하네스 셋업 후 진행
 
 **검증(0→1):** 거의 빈 web에 면담→생성→첫 기능 실행까지 한 바퀴. 메커니즘(L1–3)이 도는가.
-**fail:** 하네스 산출(.harness/.claude/.codex) 누락 / 합격테스트 red.
+**fail:** 하네스 산출(Project `.harness/` + 재사용 Core `.agentoppa/`) 누락 / 합격테스트 red.
 **판정:** `harness_present`·`acceptance` = 기계.
 
 ## 절차

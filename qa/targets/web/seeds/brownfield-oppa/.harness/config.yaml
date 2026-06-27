@@ -1,4 +1,4 @@
-harness:  safe-feature
+core:     safe-feature        # 이 프로젝트가 가리키는 재사용 Core 이름 (.agentoppa/plugins/<core>)
 description: "board-service에 기능을 안전히 추가하는 하네스 (spec→tdd→review). 기존 node --test 재사용·비손상."
 feature:  board-service       # 역할→경로의 {feature} (git 브랜치 추론 대신 고정)
 sync:     medium             # loose | medium | strict (전역 기본)

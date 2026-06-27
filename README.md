@@ -67,9 +67,54 @@ codex --dangerously-bypass-approvals-and-sandbox
  - Codex엔 `--plugin-dir`가 없다 → repo 마켓(`.agents/plugins/marketplace.json`)을 자동 감지한다. 플러그인 편집 반영은 Codex 재시작.
 
 # Concept
- - **AgentOppa = Maker.** 안 돌린다, 만든다 — Claude·Codex 양쪽에서 도는 하네스(에이전트 작업 골격)를 짓는 공장.
- - **산출물 = Core Layer + Project Layer + Config.** 유저가 손대는 `.harness/`(SOURCE) → `plugins/<harness>/`(COMPILED: 공유 컴포넌트 트리 + 두 매니페스트) + 루트 마켓, 둘 다 git 커밋(생성물 독립).
- - ▸ 전체 개념 모델 (Maker · Core/Project/Config · source→compiled): **[ARCHITECTURE.md](ARCHITECTURE.md)**
+ - **AgentOppa = Maker.** 안 돌린다, 만든다 — Claude·Codex 양쪽에서 도는 하네스(에이전트 작업 골격)를 짓는 공장. *아무것도 안 싣는다* — 유저가 자기 Core를 만들어 쓴다.
+ - **만드는 것 = 재사용 Core + 그걸 쓰는 Project, 두 층.**
+   - **Core = 재사용 프레임워크** = `.agentoppa/`(워크플로우 단계 흐름·게이트 + 범용 스킬·훅 + *인터페이스 빈자리*). AgentOppa 자신과 같은 패키징(두 마켓 + `plugins/<core>/`)이라 github·복붙으로 이식. **프로젝트 값을 안 박는 게 재사용의 비결.**
+   - **Project = 이 프로젝트의 구현·바인딩** = `.harness/`(`intent.md` + `config.yaml`{`core:` 어떤 Core · `bindings:` 능력→구현 · `values:`} + 구현 모듈).
+ - **적재 = 가리키기(by-reference).** 도구가 읽는 `.claude`/`.codex`는 Core *사본이 아니라 얇은 포인터*다 — `--plugin-dir`·마켓 install·커밋한 `.claude/settings.json`·Codex 마켓 자동감지. 그래서 한 Core를 여러 프로젝트가 *가리켜* 쓴다(복사 0).
+ - ▸ 전체 개념 모델 (Maker · Core/Project · 가리키기 적재 · 런타임 읽기): **[ARCHITECTURE.md](ARCHITECTURE.md)**
+
+# 재사용 Core 만들기·쓰기 (front door)
+
+이 repo로 만드는 핵심 흐름은 **재사용 Core를 한 번 짓고, 여러 프로젝트가 그걸 가리켜 쓰는 것**이다. 세 걸음:
+
+### ⓐ Core 짓기 — 재사용 프레임워크를 만든다
+재사용할 *워크플로우*(단계 흐름·게이트)와 *인터페이스 빈자리*(프로젝트마다 갈릴 자리, 예: e2e 러너)를 정해 Core 묶음을 빌드한다.
+```bash
+# 1) 의도 면담 (재사용 틀로 짓는다 = 프레임워크 수준)
+#    intent-interview 가 'level: framework' 로 분기 → 어떤 단계·흐름, 어떤 능력 빈자리, 겨냥 프로젝트군을 캔다.
+# 2) agent-engineer "Core 짓기" 모드 → 단계 저작( .harness/project/phases/ ) + config 의 phases/ 선언
+# 3) Core 묶음 빌드 — .harness/ 를 읽어 .agentoppa/ (이식 가능한 Core 한 벌)로 컴파일
+node ./plugins/agentoppa/bin/build-skills.mjs <core-authoring-project>
+#    → <core-authoring-project>/.agentoppa/plugins/<core>/ 에 skills·hooks·always-on + phases/ (재사용 단일본) 산출.
+```
+
+### ⓑ 적재 — Core를 도구에 물린다 (가리키기)
+빌드된 `.agentoppa/` 묶음을 도구가 *가리켜* 읽게 한다. 사본을 만들지 않는다.
+```bash
+# Claude (그때그때):  Core 묶음 안 플러그인을 직접 물린다
+claude --plugin-dir <project>/.agentoppa/plugins/<core>
+# Claude (커밋해 항상):  <project>/.claude/settings.json 에 그 마켓/플러그인을 등록 → 팀 공유
+# Codex:  <project>/.agentoppa/.agents/plugins/marketplace.json 을 자동 감지 → 목록에서 활성화
+```
+
+### ⓒ 프로젝트가 Core를 가리켜 재사용 — config만 (프로젝트 수준)
+새 프로젝트는 **phase를 복사하지 않는다.** `config.yaml`에 `core:`로 Core를 가리키고, 빈자리만 이 프로젝트 구현으로 채운다.
+```yaml
+# <new-project>/.harness/config.yaml  — 이것만. project/phases/ 사본 없음.
+core:     my-dev-core            # 가리킬 재사용 Core (= .agentoppa/plugins/<core>)
+feature:  login-oauth
+phases: [spec, e2e]              # Core 가 든 단계 이름들 (정의는 Core 묶음에서 가리켜 옴)
+values:   { test_command: "npm test" }      # 값-빈자리 → 컴파일 때 본문에 박힘
+bindings: { e2e-runner: playwright }        # 능력-빈자리 → 런타임에 .harness/ 에서 읽힘
+impl:     { playwright: "npx playwright test" }
+```
+```bash
+# 빌드·검사 모두 core: 를 보고 Core 묶음의 phase 소스를 *가리켜* 해석한다(복사 0).
+node ./plugins/agentoppa/bin/build-skills.mjs <new-project>
+node <new-project>/.harness/core/validate.mjs <new-project>/.harness/config.yaml
+```
+> Core phase 한 장을 고치면 그 *한 벌* 소스가 가리키는 **모든 프로젝트에 반영**된다 — 이게 "복사 말고 가리켜 재사용"의 핵심. (`core:` 생략 = 단독 하네스: `.harness/project/phases/`가 자기 단계를 직접 든다. 작게 시작하다 재사용이 필요해지면 그 단계를 `.agentoppa/` Core로 추출한다 = ⓐ.)
 
 # Skills
 
@@ -179,7 +224,7 @@ ccc-plugin/
 
 ## `agent-engineer` — 하네스 생성기 ✅
 
-ccc-* 메이커가 *부품*을 만든다면, 얘는 그 부품으로 **사용자 맞춤 작업 흐름(하네스)을 면담→설계→조립**한다 — Core(공장) → Project(맞춤 하네스)의 다리. 면담 → Config → 생성(컴파일) → 포장(ccc-plugin) → 검증. **산출물 = `.harness/`(SOURCE: config + core + project) → `.claude/`·`.codex/`(COMPILED)**, 둘 다 커밋(생성물 독립). 프레임워크(`references/`)는 고정, 실제 phase(콘텐츠)는 *유저의* `.harness/project/`에 — AgentOppa는 샘플 콘텐츠를 안 싣는다. 작업 사이는 *커밋된 문서*로(엔진 없음 = resume·병렬 공짜). 전체 개념 → `ARCHITECTURE.md`.
+ccc-* 메이커가 *부품*을 만든다면, 얘는 그 부품으로 **두 모드**로 조립한다 — **ⓐ Core 짓기**(재사용 프레임워크 `.agentoppa/` 묶음 빌드) · **ⓑ 프로젝트 바인딩**(`.harness/`의 `config.yaml`로 어떤 Core를 가리키고 빈자리를 채움). 면담 → Config → 생성(컴파일) → 포장(ccc-plugin) → 검증. **Core 묶음은 `.agentoppa/`로 빌드되고, 도구는 그걸 *가리켜* 적재한다**(`.claude`/`.codex`는 사본 아닌 얇은 포인터). 능력 빈자리 값은 **런타임에 `.harness/`에서 읽는다**(컴파일 때 안 박음 → 같은 Core를 다른 구현으로 재사용). 프레임워크(`references/`)는 고정, 실제 phase(콘텐츠)는 *유저의* Core(또는 단독이면 `.harness/project/`)에 — AgentOppa는 샘플 콘텐츠를 안 싣는다. 작업 사이는 *커밋된 문서*로(엔진 없음 = resume·병렬 공짜). 전체 개념 → `ARCHITECTURE.md`.
 
 ```text
 agent-engineer/
