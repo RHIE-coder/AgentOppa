@@ -1,0 +1,613 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Crect x='1.4' y='1.4' width='17.2' height='17.2' rx='3' fill='none' stroke='%231E5E4A' stroke-width='1.8'/%3E%3Cpath d='M1.4 10h17.2' stroke='%231E5E4A' stroke-width='1.8'/%3E%3C/svg%3E">
+<title>AgentOppa · 나만의 하네스 프레임워크를 만들어 주는 플러그인</title>
+<meta name="description" content="Claude Code와 Codex 양쪽에서, 어느 운영체제에서든 똑같이 도는, 내 의도에 딱 맞는 하네스 프레임워크를 만들어 주는 플러그인.">
+<style>
+  :root{
+    --ground:#EFEDE7;
+    --panel:#F8F7F2;
+    --panel-2:#FDFCF9;
+    --ink:#191B18;
+    --steel:#565B53;
+    --faint:#8B9088;
+    --line:#D8D5CB;
+    --line-strong:#C4C1B5;
+    --pine:#1E5E4A;
+    --pine-bright:#2A8060;
+    --pine-wash:#E6EFE9;
+    --pine-edge:#C8DBD0;
+    --maxw:1060px;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard","Malgun Gothic","Segoe UI",Roboto,sans-serif;
+  }
+
+  body{background:var(--ground);margin:0;}
+  .page{font-family:var(--sans);color:var(--ink);line-height:1.7;word-break:keep-all;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;}
+  *{box-sizing:border-box;}
+  a{color:inherit;}
+  ::selection{background:var(--pine);color:#fff;}
+  a:focus-visible,button:focus-visible{outline:2px solid var(--pine);outline-offset:3px;border-radius:2px;}
+
+  .inner{max-width:var(--maxw);margin:0 auto;padding:0 24px;}
+  .section{padding:clamp(60px,9vw,116px) 0;border-top:1px solid var(--line);}
+
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--pine);font-weight:600;margin:0 0 18px;}
+  h2{font-size:clamp(26px,3.6vw,40px);line-height:1.2;letter-spacing:-.018em;font-weight:780;margin:0;text-wrap:balance;}
+  .section-lead{color:var(--steel);font-size:clamp(16px,1.6vw,18px);margin:18px 0 0;}
+
+  /* nav */
+  .nav{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 24px;max-width:var(--maxw);margin:0 auto;}
+  .brand{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-weight:700;font-size:17px;letter-spacing:-.01em;}
+  .brand .op{color:var(--pine);}
+  .brand svg{display:block;}
+  .nav-links{display:flex;align-items:center;gap:22px;font-size:14px;}
+  .nav-links a{text-decoration:none;color:var(--steel);transition:color .15s;}
+  .nav-links a:hover{color:var(--ink);}
+  @media(max-width:560px){.nav-links a.hide-sm{display:none;}}
+
+  /* hero */
+  .hero{position:relative;overflow:hidden;padding:clamp(48px,8vw,100px) 0 clamp(60px,9vw,104px);}
+  .hero::before{content:"";position:absolute;inset:0;
+    background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
+    background-size:36px 36px;opacity:.55;
+    -webkit-mask-image:radial-gradient(120% 80% at 18% 0%,#000 0%,transparent 72%);
+    mask-image:radial-gradient(120% 80% at 18% 0%,#000 0%,transparent 72%);pointer-events:none;}
+  .hero .inner{position:relative;z-index:1;}
+  .hero-kicker{font-family:var(--mono);font-size:12.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--pine);font-weight:600;display:inline-flex;align-items:center;gap:9px;border:1px solid var(--pine-edge);background:#fff;padding:7px 13px;border-radius:999px;}
+  .hero-kicker .pulse{width:7px;height:7px;border-radius:50%;background:var(--pine-bright);}
+  h1{font-size:clamp(34px,6.2vw,60px);line-height:1.1;letter-spacing:-.026em;font-weight:800;margin:26px 0 0;max-width:18ch;text-wrap:balance;}
+  h1 .hl{color:var(--pine);}
+  .hero-sub{font-size:clamp(16px,1.9vw,20px);color:var(--steel);max-width:52ch;margin:22px 0 0;line-height:1.6;}
+  .hero-cta{display:flex;flex-wrap:wrap;gap:12px;margin:34px 0 0;}
+  .chips{display:flex;flex-wrap:wrap;gap:9px;margin:30px 0 0;}
+  .chip{font-family:var(--mono);font-size:12px;color:var(--steel);border:1px solid var(--line);background:var(--panel-2);padding:6px 11px;border-radius:999px;}
+  .chip b{color:var(--ink);font-weight:600;}
+
+  /* buttons */
+  .btn{display:inline-flex;align-items:center;gap:8px;font-family:var(--sans);font-weight:600;font-size:15px;padding:13px 22px;border-radius:4px;text-decoration:none;border:1px solid transparent;cursor:pointer;transition:background .16s,border-color .16s,transform .16s;}
+  .btn-primary{background:var(--pine);color:#fff;}
+  .btn-primary:hover{background:var(--pine-bright);}
+  .btn-ghost{background:#fff;color:var(--ink);border-color:var(--line-strong);}
+  .btn-ghost:hover{border-color:var(--ink);}
+  .btn:active{transform:translateY(1px);}
+
+  /* problem cards */
+  .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:5px;overflow:hidden;margin:40px 0 0;}
+  .card{background:var(--panel-2);padding:28px 26px;}
+  .card .tag{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--pine);font-weight:600;}
+  .card h3{font-size:19px;font-weight:730;margin:14px 0 8px;letter-spacing:-.01em;}
+  .card p{margin:0;color:var(--steel);font-size:15px;line-height:1.62;}
+  @media(max-width:720px){.cards{grid-template-columns:1fr;}}
+  .solve{display:flex;gap:16px;align-items:flex-start;margin:26px 0 0;background:var(--pine-wash);border:1px solid var(--pine-edge);border-radius:6px;padding:24px 26px;}
+  .solve .mark{font-family:var(--mono);color:var(--pine);font-weight:700;font-size:20px;flex:none;}
+  .solve p{margin:0;font-size:clamp(16px,1.7vw,19px);line-height:1.6;}
+  .solve strong{color:var(--pine);font-weight:730;}
+
+  /* install */
+  .code-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:36px 0 0;}
+  @media(max-width:720px){.code-grid{grid-template-columns:1fr;}}
+  .code{background:#15211C;border:1px solid #223830;border-radius:7px;overflow:hidden;}
+  .code-head{display:flex;align-items:center;gap:9px;padding:13px 16px;border-bottom:1px solid #223830;}
+  .code-head .dot{width:9px;height:9px;border-radius:50%;background:var(--pine-bright);flex:none;}
+  .code-head .lbl{font-family:var(--mono);font-size:13px;color:#cfe3da;font-weight:600;}
+  .copy{margin-left:auto;font-family:var(--mono);font-size:12px;color:#9fc4b6;background:transparent;border:1px solid #2f4b40;border-radius:4px;padding:5px 11px;cursor:pointer;transition:.15s;}
+  .copy:hover{color:#fff;border-color:var(--pine-bright);}
+  .code pre{margin:0;padding:18px 16px;overflow-x:auto;font-family:var(--mono);font-size:13.5px;line-height:1.85;color:#e7f1ec;}
+  .code pre .c{color:#7fa394;}
+  .code pre .s{color:#a7e0c6;}
+  .note{font-size:14px;color:var(--steel);margin:20px 0 0;}
+  .note b{color:var(--ink);}
+  .note a{color:var(--pine);font-weight:600;text-decoration:none;border-bottom:1px solid var(--pine-edge);}
+  .note a:hover{border-bottom-color:var(--pine);}
+
+  /* how / steps */
+  .step-label{font-family:var(--mono);font-size:13px;color:var(--pine);font-weight:600;margin:0 0 14px;display:flex;align-items:center;gap:10px;}
+  .step-label .n{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border:1.5px solid var(--pine);border-radius:50%;font-size:12.5px;}
+  .diagram{margin:0 0 clamp(46px,6vw,76px);}
+  .diagram-desc{color:var(--steel);font-size:15.5px;margin:18px 0 0;line-height:1.62;}
+  .diagram-desc b{color:var(--ink);}
+  .diagram-desc code{font-family:var(--mono);font-size:13px;background:var(--panel);border:1px solid var(--line);border-radius:3px;padding:1px 6px;}
+
+  /* terminal demo */
+  .term{background:#14201B;border:1px solid #25392F;border-radius:9px;overflow:hidden;}
+  .term-bar{display:flex;align-items:center;gap:7px;padding:11px 14px;border-bottom:1px solid #25392F;}
+  .tb-dot{width:9px;height:9px;border-radius:50%;background:#2f4b40;}
+  .tb-title{font-family:var(--mono);font-size:12.5px;color:#9fc4b6;margin-left:6px;}
+  .term-replay{margin-left:auto;font-family:var(--mono);font-size:12px;color:#9fc4b6;background:transparent;border:1px solid #2f4b40;border-radius:5px;padding:5px 11px;cursor:pointer;transition:.15s;}
+  .term-replay:hover{color:#fff;border-color:var(--pine-bright);}
+  .term-body{padding:17px 17px 19px;font-family:var(--mono);font-size:13px;line-height:1.65;color:#dfeae4;}
+  .tl{white-space:pre-wrap;}
+  .tl+.tl{margin-top:3px;}
+  .tl-user{color:#fff;}
+  .tl-sys{color:#7fdab4;font-weight:600;margin-top:11px;}
+  .tl-q{color:#bcd3c9;}
+  .tl-meta{color:#9fc0b1;}
+  .tl-ok{color:#86c7a6;}
+  .tl-done{color:#fff;font-weight:600;margin-top:9px;}
+  @media(prefers-reduced-motion:no-preference){
+    .term.is-anim .tl{opacity:0;transform:translateY(5px);}
+    .term.is-anim .tl.show{opacity:1;transform:none;transition:opacity .34s ease,transform .34s ease;}
+  }
+  .demo-tip{font-family:var(--mono);font-size:12.5px;color:var(--steel);background:var(--panel);border:1px dashed var(--line-strong);border-radius:6px;padding:13px 15px;margin:16px 0 0;line-height:1.6;}
+  .demo-tip b{color:var(--pine);}
+
+  /* reuse diagram */
+  .reuse-core{border:1px solid var(--pine-edge);background:var(--pine-wash);border-radius:9px;padding:20px 22px;max-width:560px;margin:0 auto;}
+  .rc-head{display:flex;gap:10px;align-items:baseline;justify-content:space-between;flex-wrap:wrap;}
+  .rc-head .lk{font-family:var(--mono);font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--pine);font-weight:600;}
+  .rc-head code{font-family:var(--mono);font-size:12.5px;color:var(--steel);}
+  .rc-name{font-family:var(--mono);font-weight:700;color:var(--pine);font-size:17px;margin:11px 0 8px;}
+  .rc-row{font-size:14.5px;color:var(--ink);}
+  .rc-row code,.rc-name + .rc-row code{font-family:var(--mono);font-size:13px;background:#fff;border:1px solid var(--pine-edge);border-radius:3px;padding:1px 6px;color:var(--pine);}
+  .reuse-link{text-align:center;font-family:var(--mono);font-size:12.5px;color:var(--pine);margin:15px 0;}
+  .reuse-projects{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  @media(max-width:620px){.reuse-projects{grid-template-columns:1fr;}}
+  .rp{border:1px solid var(--line-strong);border-radius:8px;background:var(--panel-2);overflow:hidden;}
+  .rp-head{padding:12px 16px;border-bottom:1px solid var(--line);font-weight:680;font-size:14px;}
+  .rp-head .path{font-family:var(--mono);font-size:11.5px;color:var(--faint);font-weight:400;margin-top:3px;}
+  .rp pre{margin:0;padding:14px 16px;font-family:var(--mono);font-size:12.6px;line-height:1.7;color:var(--ink);overflow-x:auto;background:#fbfaf6;}
+  .rp pre b{color:var(--pine);font-weight:700;}
+
+  /* build direction + trees */
+  .build-flow{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin:0 0 20px;font-family:var(--mono);}
+  .bf{padding:11px 15px;border:1px solid var(--line-strong);border-radius:7px;background:var(--panel-2);font-size:13.5px;font-weight:600;}
+  .bf.src{border-style:dashed;}
+  .bf.out{border-color:var(--pine);color:var(--pine);background:var(--pine-wash);}
+  .bf-sub{font-weight:400;color:var(--steel);font-size:12px;margin-left:4px;}
+  .bf.out .bf-sub{color:var(--pine);}
+  .bf-arrow{color:var(--pine);font-size:18px;text-align:center;line-height:1;}
+  .bf-arrow small{display:block;font-family:var(--mono);font-size:10.5px;color:var(--steel);margin-top:2px;}
+  .trees{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  @media(max-width:680px){.trees{grid-template-columns:1fr;}}
+  .tree-box{border:1px solid var(--line-strong);border-radius:8px;overflow:hidden;background:var(--panel-2);}
+  .tree-box .th{padding:12px 16px;border-bottom:1px solid var(--line);font-weight:680;font-size:14px;font-family:var(--mono);}
+  .tree-box .th .sub{font-weight:400;color:var(--steel);font-size:12px;font-family:var(--sans);}
+  .tree-box pre{margin:0;padding:14px 16px;font-family:var(--mono);font-size:12.4px;line-height:1.75;color:var(--ink);overflow-x:auto;background:#fbfaf6;}
+  .tree-box pre .d{color:var(--pine);}
+  .tree-box pre .c{color:var(--faint);}
+  .flip-note{display:flex;gap:12px;align-items:flex-start;margin:20px 0 0;background:var(--pine-wash);border:1px solid var(--pine-edge);border-radius:7px;padding:16px 18px;}
+  .flip-note .ic{flex:none;font-weight:700;color:var(--pine);}
+  .flip-note p{margin:0;font-size:14.5px;line-height:1.6;}
+  .flip-note b{color:var(--pine);font-weight:700;}
+  .flip-note code,.sub-h code,.diagram-desc code{font-family:var(--mono);font-size:12.5px;background:#fff;border:1px solid var(--pine-edge);border-radius:3px;padding:1px 6px;color:var(--pine);}
+  .sub-h{font-size:15.5px;font-weight:600;margin:32px 0 14px;}
+
+  /* layer flow (Maker → Core → Project) */
+  .layer-flow{display:flex;align-items:stretch;flex-wrap:nowrap;gap:0;margin:4px 0 24px;}
+  .lf{flex:1 1 0;min-width:0;border:1px solid var(--line-strong);border-radius:9px;background:var(--panel-2);padding:18px;}
+  .lf.core{border-color:var(--pine);background:var(--pine-wash);}
+  .lf-tag{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--pine);font-weight:700;}
+  .lf-name{font-family:var(--mono);font-size:16px;font-weight:700;margin:9px 0;color:var(--ink);}
+  .lf-d{font-size:13.5px;color:var(--steel);line-height:1.55;}
+  .lf-d b{color:var(--ink);font-weight:600;}
+  .lf-arrow{flex:none;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 12px;color:var(--pine);font-family:var(--mono);font-size:20px;}
+  .lf-arrow small{font-size:10px;color:var(--steel);margin-top:4px;text-align:center;line-height:1.3;}
+  @media(max-width:760px){.layer-flow{flex-direction:column;} .lf-arrow{flex-direction:row;gap:6px;padding:9px 0;}}
+
+  /* org chart (Maker → Core → 여러 Project) */
+  .org{display:flex;flex-direction:column;align-items:center;margin:8px 0;}
+  .org-node{border:1px solid var(--line-strong);border-radius:9px;background:var(--panel-2);padding:13px 24px;text-align:center;}
+  .org-node.core{border-color:var(--pine);background:var(--pine-wash);}
+  .org-node.proj{padding:11px 16px;}
+  .on-tag{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--pine);font-weight:700;}
+  .on-name{font-weight:680;font-size:14.5px;margin-top:5px;color:var(--ink);}
+  .org-link{display:flex;flex-direction:column;align-items:center;color:var(--pine);padding:7px 0;}
+  .org-link .ar{font-family:var(--mono);font-size:18px;line-height:1;}
+  .org-lbl{font-family:var(--mono);font-size:11.5px;color:var(--steel);margin-top:3px;text-align:center;}
+  .org-branch{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;width:100%;max-width:600px;position:relative;margin-top:26px;}
+  .org-branch::before{content:"";position:absolute;top:-14px;left:16.66%;right:16.66%;height:1.5px;background:var(--line-strong);}
+  .org-branch>.org-node{position:relative;}
+  .org-branch>.org-node::before{content:"";position:absolute;top:-14px;left:50%;width:1.5px;height:14px;background:var(--line-strong);transform:translateX(-50%);}
+  @media(max-width:600px){.org-branch{grid-template-columns:1fr;gap:10px;max-width:280px;}.org-branch::before{display:none;}.org-branch>.org-node::before{display:none;}}
+
+  /* result */
+  .result{border:1px solid var(--pine-edge);background:var(--pine-wash);border-radius:9px;padding:clamp(26px,4vw,40px);text-align:center;}
+  .result-core{display:inline-flex;align-items:center;gap:10px;background:var(--pine);color:#fff;font-weight:680;font-size:clamp(16px,2vw,19px);padding:14px 26px;border-radius:999px;}
+  .result-core .mono{font-family:var(--mono);font-weight:700;opacity:.85;font-size:14px;}
+  .result-down{color:var(--pine);font-size:24px;margin:6px 0;}
+  .result-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;text-align:left;}
+  @media(max-width:760px){.result-grid{grid-template-columns:1fr 1fr;}}
+  @media(max-width:460px){.result-grid{grid-template-columns:1fr;}}
+  .rcard{background:#fff;border:1px solid var(--pine-edge);border-radius:7px;padding:18px 16px;}
+  .rcard .rk{font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--pine);font-weight:600;margin:0 0 8px;}
+  .rcard p{margin:0;font-size:14px;color:var(--ink);line-height:1.5;text-wrap:balance;}
+
+  /* self-harden */
+  .harden-flow{display:flex;align-items:center;flex-wrap:wrap;gap:11px;margin:0 0 6px;}
+  .hstep{font-family:var(--mono);font-size:13.5px;font-weight:600;padding:10px 16px;border:1px solid var(--line-strong);border-radius:6px;background:var(--panel-2);}
+  .hstep.last{border-color:var(--pine);color:var(--pine);background:var(--pine-wash);}
+  .harrow{color:var(--pine);font-family:var(--mono);font-size:17px;}
+
+  /* parts */
+  .group-label{font-family:var(--mono);font-size:12.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--pine);font-weight:600;margin:36px 0 4px;}
+  .ccc-note{display:flex;gap:12px;align-items:baseline;flex-wrap:wrap;margin:36px 0 0;font-size:15px;color:var(--steel);}
+  .ccc-note code{font-family:var(--mono);background:var(--pine-wash);color:var(--pine);border:1px solid var(--pine-edge);border-radius:4px;padding:3px 9px;font-size:13.5px;font-weight:600;}
+  .parts{border-top:1px solid var(--line);margin:14px 0 0;}
+  .part{display:grid;grid-template-columns:210px 1fr;gap:24px;padding:20px 0;border-bottom:1px solid var(--line);align-items:baseline;}
+  .part .pn{font-family:var(--mono);font-size:14.5px;color:var(--pine);font-weight:700;}
+  .part .pn small{display:block;color:var(--steel);font-weight:400;font-size:12.5px;margin-top:4px;}
+  .part .pd{font-size:15.5px;color:var(--ink);line-height:1.62;}
+  .part .pd b{color:var(--pine);font-weight:680;}
+  @media(max-width:620px){.part{grid-template-columns:1fr;gap:6px;}}
+
+  /* footer */
+  .foot{border-top:1px solid var(--line);padding:44px 0;}
+  .foot .inner{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;}
+  .foot .brand{font-size:15px;}
+  .foot-links{display:flex;gap:20px;font-family:var(--mono);font-size:13px;}
+  .foot-links a{color:var(--steel);text-decoration:none;}
+  .foot-links a:hover{color:var(--pine);}
+  .foot .fine{font-family:var(--mono);font-size:12px;color:var(--faint);width:100%;margin-top:6px;}
+
+  @media(prefers-reduced-motion:no-preference){
+    [data-reveal]{opacity:0;transform:translateY(16px);transition:opacity .65s ease,transform .65s ease;}
+    [data-reveal].in{opacity:1;transform:none;}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="nav">
+    <div class="brand">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <rect x="1.4" y="1.4" width="17.2" height="17.2" rx="3" stroke="#1E5E4A" stroke-width="1.6"/>
+        <path d="M1.4 10h17.2" stroke="#1E5E4A" stroke-width="1.6"/>
+        <circle cx="6" cy="5.7" r="1.5" fill="#1E5E4A"/>
+        <circle cx="14" cy="14.3" r="1.5" fill="#2A8060"/>
+      </svg>
+      Agent<span class="op">Oppa</span>
+    </div>
+    <nav class="nav-links">
+      <a href="#install" class="hide-sm">설치</a>
+      <a href="#how" class="hide-sm">동작 방식</a>
+      <a href="https://github.com/rhie-coder/AgentOppa">GitHub ↗</a>
+    </nav>
+  </header>
+
+  <!-- ① 첫 화면 -->
+  <section class="hero">
+    <div class="inner">
+      <span class="hero-kicker"><span class="pulse"></span>Claude Code · Codex 플러그인</span>
+      <h1>나만의 <span class="hl">하네스 프레임워크</span>를, 한 번에 제대로.</h1>
+      <p class="hero-sub">Claude Code와 Codex 양쪽에서, 어느 운영체제에서든 똑같이 도는, 내 의도에 딱 맞는 작업 틀을 만들어 줍니다.</p>
+      <div class="hero-cta">
+        <a class="btn btn-primary" href="#install">설치하기</a>
+        <a class="btn btn-ghost" href="#how">어떻게 동작하나 →</a>
+      </div>
+      <div class="chips">
+        <span class="chip"><b>Claude Code</b> · <b>Codex</b></span>
+        <span class="chip"><b>Windows</b> · <b>macOS</b> · <b>Linux</b></span>
+        <span class="chip">어디서나 같은 품질</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ② 무엇을 해결하나 -->
+  <section class="section" id="why">
+    <div class="inner">
+      <p class="eyebrow" data-reveal>왜 필요한가</p>
+      <h2 data-reveal>하네스 프레임워크, 직접 만들려면 생각보다 어렵습니다.</h2>
+      <div class="cards" data-reveal>
+        <div class="card">
+          <span class="tag">표준</span>
+          <h3>지킬 규칙이 많다</h3>
+          <p>하네스를 이루는 요소마다 지켜야 할 표준이 많아, 처음부터 제대로 만들기 어렵습니다.</p>
+        </div>
+        <div class="card">
+          <span class="tag">도구</span>
+          <h3>도구마다 따로</h3>
+          <p>Claude Code용과 Codex용을 각각 따로 만들고 맞춰야 합니다.</p>
+        </div>
+        <div class="card">
+          <span class="tag">운영체제</span>
+          <h3>OS마다 또</h3>
+          <p>Windows·macOS·Linux마다 손이 다시 가고, 같은 결과를 보장하기 어렵습니다.</p>
+        </div>
+      </div>
+      <div class="solve" data-reveal>
+        <span class="mark">→</span>
+        <p>AgentOppa는 이 셋을 <strong>기본으로 해결</strong>합니다. 그리고 당신의 의도를 정확히 캐물어, <strong>당신만의 하네스 프레임워크</strong>를 만들어 줍니다.</p>
+      </div>
+
+      <p class="sub-h" data-reveal style="margin-top:38px">만들어 주는 것: 세 층</p>
+      <div class="org" data-reveal>
+        <div class="org-node maker"><div class="on-tag">Maker</div><div class="on-name">AgentOppa</div></div>
+        <div class="org-link"><span class="ar">↓</span><span class="org-lbl">만든다</span></div>
+        <div class="org-node core"><div class="on-tag">Core Layer</div><div class="on-name">내가 만든 재사용 프레임워크</div></div>
+        <div class="org-link"><span class="ar">↓</span><span class="org-lbl">여러 프로젝트가 가져다 쓴다 (재사용)</span></div>
+        <div class="org-branch">
+          <div class="org-node proj"><div class="on-tag">Project</div><div class="on-name">프로젝트 A</div></div>
+          <div class="org-node proj"><div class="on-tag">Project</div><div class="on-name">프로젝트 B</div></div>
+          <div class="org-node proj"><div class="on-tag">Project</div><div class="on-name">프로젝트 C</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ③ 설치 -->
+  <section class="section" id="install">
+    <div class="inner">
+      <p class="eyebrow" data-reveal>빠른 시작</p>
+      <h2 data-reveal>두 줄이면 설치됩니다.</h2>
+      <div class="code-grid" data-reveal>
+        <div class="code">
+          <div class="code-head"><span class="dot"></span><span class="lbl">Claude Code</span><button class="copy" type="button">복사</button></div>
+<pre><span class="c"># 마켓플레이스 등록</span>
+/plugin marketplace add <span class="s">rhie-coder/agentoppa</span>
+<span class="c"># 플러그인 설치</span>
+/plugin install <span class="s">agentoppa@agentoppa</span></pre>
+        </div>
+        <div class="code">
+          <div class="code-head"><span class="dot"></span><span class="lbl">Codex</span><button class="copy" type="button">복사</button></div>
+<pre><span class="c"># 마켓플레이스 등록 후</span>
+<span class="c"># 목록에서 AgentOppa 켜기</span>
+codex plugin marketplace add <span class="s">rhie-coder/agentoppa</span></pre>
+        </div>
+      </div>
+      <p class="note" data-reveal>필요한 것: <b>Node.js</b> 하나면 됩니다. <a href="https://nodejs.org/ko/download" target="_blank" rel="noopener">Node.js 설치하기 ↗</a></p>
+    </div>
+  </section>
+
+  <!-- ④ 어떻게 동작하나 -->
+  <section class="section" id="how">
+    <div class="inner">
+      <p class="eyebrow" data-reveal>어떻게 동작하나</p>
+      <h2 data-reveal>물어보고, 조립하고, 어디서나 씁니다.</h2>
+
+      <p class="sub-h" data-reveal style="margin-top:36px">각 층이 하는 일</p>
+      <div class="layer-flow" data-reveal>
+        <div class="lf">
+          <div class="lf-tag">Maker</div>
+          <div class="lf-name">AgentOppa</div>
+          <div class="lf-d">당신이 설치하는 플러그인. 하네스 프레임워크를 <b>만들어 주는 공장</b>.</div>
+        </div>
+        <div class="lf-arrow">→<small>agent-engineer<br>가 만듦</small></div>
+        <div class="lf core">
+          <div class="lf-tag">Core Layer</div>
+          <div class="lf-name">.agentoppa/</div>
+          <div class="lf-d"><b>내가 만든 재사용 하네스 프레임워크.</b> 여러 프로젝트가 가져다 쓰는 자체완결 플러그인.</div>
+        </div>
+        <div class="lf-arrow">→<small>setup<br>이 만듦</small></div>
+        <div class="lf">
+          <div class="lf-tag">Project Layer</div>
+          <div class="lf-name">.harness/</div>
+          <div class="lf-d"><b>프로젝트별 설정.</b> Core가 프로젝트마다 <b>자동 생성</b> (손으로 안 씀).</div>
+        </div>
+      </div>
+
+      <!-- 1. 만드는 과정 (동작 데모) -->
+      <div class="diagram" data-reveal style="margin-top:48px">
+        <p class="step-label"><span class="n">1</span>만드는 과정 (예시)</p>
+        <div class="term is-anim" data-term>
+          <div class="term-bar"><span class="tb-dot"></span><span class="tb-dot"></span><span class="tb-dot"></span><span class="tb-title">Claude Code</span><button class="term-replay" type="button" hidden>↻ 다시 보기</button></div>
+          <div class="term-body">
+            <div class="tl tl-user">&gt; 여러 프로젝트에서 재사용할 개발 워크플로우 만들어줘</div>
+            <div class="tl tl-sys">🔧 agent-engineer 가 켜졌어요. 먼저 의도부터 (한 번에 한 질문씩)</div>
+            <div class="tl tl-q">Q. 어떤 단계로 흐르게 할까요?</div>
+            <div class="tl tl-user">&gt; 명세(spec) → TDD → 리뷰(review)</div>
+            <div class="tl tl-q">Q. 프로젝트마다 달라질 부분이 있나요?</div>
+            <div class="tl tl-user">&gt; 테스트 도구요 (프로젝트마다 달라요)</div>
+            <div class="tl tl-sys">좋아요. 그 자리는 빈자리로 두고 조립할게요.</div>
+            <div class="tl tl-ok">✓ 단계별 스킬 조립 (ccc-skills)</div>
+            <div class="tl tl-ok">✓ Claude·Codex 양쪽으로 포장 (ccc-plugin)</div>
+            <div class="tl tl-ok">✓ .agentoppa/ 재사용 Core로 빌드 + 검증 통과</div>
+            <div class="tl tl-done">완성. 다른 프로젝트도 이 Core를 가리켜 쓸 수 있어요.</div>
+          </div>
+        </div>
+        <div class="demo-tip">참고 · 이렇게 <b>설명만 하면 스킬이 자동으로 켜집니다</b> (<code>/agent-engineer</code> 로 직접 불러도 됨). 면담(<b>intent-interview</b>)은 agent-engineer 안에서 자동으로 일어나요. 따로 부를 필요 없습니다.</div>
+      </div>
+
+      <!-- 2. 세 층 (Maker → Core → Project) -->
+      <div class="diagram" data-reveal>
+        <p class="step-label"><span class="n">2</span>Core 안엔 무엇이, 설치하면 어떻게 되나</p>
+
+        <div class="trees">
+          <div class="tree-box">
+            <div class="th">.agentoppa/ <span class="sub">(Core Layer · agent-engineer가 만든 재사용 틀)</span></div>
+<pre><span class="d">.agentoppa/</span>
+├── .claude-plugin/ .agents/   <span class="c"># 두 도구 마켓</span>
+└── plugins/<span class="d">my-harness-workflow</span>/
+    ├── skills/{spec,tdd,review}/  <span class="c"># 워크플로우 단계</span>
+    ├── skills/setup/          <span class="c"># .harness 를 자동으로 만듦</span>
+    ├── interface.json         <span class="c"># 빈자리 명세</span>
+    └── always-on.md</pre>
+          </div>
+          <div class="tree-box">
+            <div class="th">.harness/ <span class="sub">(Project Layer · 이 프로젝트 층)</span></div>
+<pre><span class="d">.harness/</span>
+├── config.yaml        <span class="c"># 설정 (필수). setup이 깖, 빈자리만 채움</span>
+├── <span class="d">project/</span>           <span class="c"># 내 구현 (유저가 입맛대로 채움)</span>
+│   ├── impl/          <span class="c"># 구현 모듈</span>
+│   └── agents/        <span class="c"># 보조 에이전트</span>
+├── core/validate.mjs  <span class="c"># 검사기 (빌드가 넣음)</span>
+└── artifacts/         <span class="c"># 결과물 (돌리면 나옴)</span></pre>
+          </div>
+        </div>
+
+        <p class="sub-h">그래서 다른 프로젝트는 <b>설치만 하면</b> Core가 스스로 <code>.harness</code>를 만들어 줍니다 <b>(AgentOppa 없이)</b>.</p>
+        <div class="term is-anim" data-term>
+          <div class="term-bar"><span class="tb-dot"></span><span class="tb-dot"></span><span class="tb-dot"></span><span class="tb-title">프로젝트 B · Claude Code (AgentOppa 없음)</span><button class="term-replay" type="button" hidden>↻ 다시 보기</button></div>
+          <div class="term-body">
+            <div class="tl tl-user">&gt; /plugin install my-harness-workflow</div>
+            <div class="tl tl-ok">✓ 설치됨: 단계 스킬(spec·tdd·review) + setup</div>
+            <div class="tl tl-user">&gt; 이 하네스 붙여줘</div>
+            <div class="tl tl-sys">🔧 setup: .harness 를 만듭니다 (이 플러그인만으로)</div>
+            <div class="tl tl-ok">✓ 만듦: .harness/config.yaml (core: my-harness-workflow)</div>
+            <div class="tl tl-q">   채울 빈자리: test-runner</div>
+            <div class="tl tl-sys">프로젝트를 보니 playwright 가 있네요. 그걸로 채울게요.</div>
+            <div class="tl tl-ok">✓ test-runner: "npx playwright test"</div>
+            <div class="tl tl-done">완료. 이제 /spec 부터 쓰면 됩니다. (AgentOppa 한 번도 안 씀)</div>
+          </div>
+        </div>
+        <p class="diagram-desc">같은 Core 하나를 여러 프로젝트가 씁니다. 프로젝트마다 다른 건 빈자리(<code>bindings</code>)뿐입니다. Core의 <code>setup</code>이 <code>.harness</code>를 만들고, 프로젝트를 살펴 채웁니다. Core를 한 번 고치면 가리키는 모든 프로젝트에 반영됩니다.</p>
+
+        <div class="flip-note">
+          <span class="ic">✓</span>
+          <p><b>만들 땐 AgentOppa(Maker), 쓸 땐 필요 없습니다.</b> AgentOppa는 Core를 <b>만들어 주는 컴파일러</b>예요. 다 만든 Core(<code>.agentoppa</code>)는 혼자 도는 플러그인이라, 다른 프로젝트는 그걸 설치만 하면 그 안 <code>setup</code>이 <code>.harness</code>를 알아서 만들어 줍니다.</p>
+        </div>
+      </div>
+
+      <!-- 3. 결과 -->
+      <div class="diagram" data-reveal style="margin-bottom:0">
+        <p class="step-label"><span class="n">3</span>결과</p>
+        <div class="result">
+          <div class="result-core">하나의 하네스 프레임워크 <span class="mono">×1</span></div>
+          <div class="result-down">↓</div>
+          <div class="result-grid">
+            <div class="rcard"><p class="rk">두 도구</p><p>Claude·Codex 어디서나 같은&nbsp;품질</p></div>
+            <div class="rcard"><p class="rk">모든 OS</p><p>Windows·macOS·Linux 모두&nbsp;지원</p></div>
+            <div class="rcard"><p class="rk">재사용</p><p>다른 프로젝트에 그대로&nbsp;재사용</p></div>
+            <div class="rcard"><p class="rk">자급</p><p>설치하면 스스로&nbsp;셋업 (AgentOppa&nbsp;없이)</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- self-harden -->
+  <section class="section">
+    <div class="inner">
+      <p class="eyebrow" data-reveal>self-harden</p>
+      <h2 data-reveal>쓸수록 똑똑해집니다.</h2>
+      <p class="section-lead" data-reveal>한 번 바로잡아 주면, 같은 실수를 다시는 못 하게 영구 가드로 굳혀 둡니다. 실제로는 아래 화면을 띄워 확인을 받은 뒤 주입합니다.</p>
+      <div class="harden-flow" data-reveal style="margin-top:28px">
+        <span class="hstep">실수</span><span class="harrow">→</span>
+        <span class="hstep">한 번 바로잡기</span><span class="harrow">→</span>
+        <span class="hstep last">영구 가드</span>
+      </div>
+      <div data-reveal>
+        <div class="term is-anim" data-term style="margin-top:20px">
+          <div class="term-bar"><span class="tb-dot"></span><span class="tb-dot"></span><span class="tb-dot"></span><span class="tb-title">self-harden · 확인 화면</span><button class="term-replay" type="button" hidden>↻ 다시 보기</button></div>
+          <div class="term-body">
+            <div class="tl tl-user">&gt; 아니, 검색 하나 비었다고 "없음"으로 단정하면 안 되지</div>
+            <div class="tl tl-sys">🔧 self-harden · 좁은 검색 결과로 부재를 단정하지 않기</div>
+            <div class="tl tl-q">   이번 정정을 다음 세션도 기억하게 굳힙니다.</div>
+            <div class="tl tl-meta">[1] 무슨 일이 있었나   한 폴더만 보고 "그런 거 없음"이라 답함</div>
+            <div class="tl tl-meta">[2] 같은 종류 전체로   좁은 스코프의 빈 결과 = "여기 없음"일 뿐</div>
+            <div class="tl tl-meta">[3] 어떻게 막을까      검사기 ✓ (제일 셈), 자동으로 잡힘</div>
+            <div class="tl tl-meta">[4] 누구에게 적용      이 repo 내부</div>
+            <div class="tl tl-meta">[5] 어디에 넣나        validate.mjs + 빨강/초록 테스트 한 쌍</div>
+            <div class="tl tl-q">[7] 이대로 진행할까요?  [진행] / [고칠 점]</div>
+            <div class="tl tl-user">&gt; 진행</div>
+            <div class="tl tl-done">✓ 가드 주입. 다음부턴 이 실수가 자동으로 막힙니다.</div>
+          </div>
+        </div>
+      </div>
+      <div class="solve" data-reveal style="margin-top:26px">
+        <span class="mark">↻</span>
+        <p><b>AgentOppa 자신도 이 self-harden을 씁니다.</b> 스스로 단단해지는 <b>Agent Framework Maker</b>입니다. 쓸수록 배우고, 플러그인은 계속 발전합니다.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ⑤ 부품 소개 -->
+  <section class="section" id="parts">
+    <div class="inner">
+      <p class="eyebrow" data-reveal>무엇으로 만들어지나</p>
+      <h2 data-reveal>안에 든 도구들</h2>
+      <p class="section-lead" data-reveal>AgentOppa는 두 묶음으로 되어 있습니다. 전체 흐름을 진행하는 도구, 그리고 하네스를 이루는 부품을 만드는 도구.</p>
+
+      <p class="group-label" data-reveal>흐름을 진행하는 도구</p>
+      <div class="parts" data-reveal>
+        <div class="part"><div class="pn">agent-engineer<small>생성기</small></div><div class="pd">면담부터 조립·포장·검증까지, 하네스를 만드는 전 과정을 진행합니다. 아래 <b>intent-interview</b>와 <b>ccc-*</b> 부품을 안에서 불러 씁니다.</div></div>
+        <div class="part"><div class="pn">intent-interview<small>면담</small></div><div class="pd">무엇을 만들지 한 번에 한 질문씩 캐물어 의도를 또렷이 정리합니다. agent-engineer의 첫 단계로 자동 포함되며, 의도만 정리하고 싶을 땐 단독으로도 씁니다.</div></div>
+        <div class="part"><div class="pn">self-harden<small>단단해지기</small></div><div class="pd">한 번 바로잡은 실수를 다시는 못 하게 영구 가드(자동 검사·훅·규칙)로 굳혀, 같은 실수의 재발을 막습니다.</div></div>
+      </div>
+
+      <p class="ccc-note" data-reveal><code>ccc = create-claude-codex</code> 아래 부품들을 Claude·Codex 양쪽에서 똑같이 동작하도록 만든다는 뜻입니다.</p>
+      <p class="group-label" data-reveal style="margin-top:8px">부품을 만드는 도구 (ccc-*)</p>
+      <div class="parts" data-reveal>
+        <div class="part"><div class="pn">ccc-skills<small>스킬</small></div><div class="pd"><b>스킬</b>은 특정 작업의 절차를 담은 설명서입니다. 관련된 요청이 오면 자동으로 불려와, 정해진 방식대로 작업을 수행합니다. 양쪽 도구에서 동일하게 도는 스킬을 만듭니다.</div></div>
+        <div class="part"><div class="pn">ccc-memory<small>메모리</small></div><div class="pd"><b>메모리</b>는 에이전트가 모든 세션에서 늘 따르는 규칙·지침입니다(예: AGENTS.md). 양쪽 도구가 같은 규칙을 읽도록 정리합니다.</div></div>
+        <div class="part"><div class="pn">ccc-agents<small>서브에이전트</small></div><div class="pd"><b>서브에이전트</b>는 특정 역할을 전담하는 별도 에이전트입니다(예: 코드 리뷰 전담). 본체가 그 역할의 작업을 위임합니다. 양쪽 도구용으로 만듭니다.</div></div>
+        <div class="part"><div class="pn">ccc-hooks<small>훅</small></div><div class="pd"><b>훅</b>은 정해진 시점(예: 파일 편집 직후, 작업 종료 전)에 자동으로 실행되는 명령입니다. 양쪽 도구에서 동작하는 훅을 만듭니다.</div></div>
+        <div class="part"><div class="pn">ccc-plugin<small>플러그인</small></div><div class="pd"><b>플러그인</b>은 스킬·훅·서브에이전트를 하나로 묶어 설치·배포하는 단위입니다. Claude·Codex 양쪽 마켓에 함께 싣습니다.</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ⑥ 푸터 -->
+  <footer class="foot">
+    <div class="inner">
+      <div class="brand">
+        <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <rect x="1.4" y="1.4" width="17.2" height="17.2" rx="3" stroke="#1E5E4A" stroke-width="1.6"/>
+          <path d="M1.4 10h17.2" stroke="#1E5E4A" stroke-width="1.6"/>
+          <circle cx="6" cy="5.7" r="1.5" fill="#1E5E4A"/>
+          <circle cx="14" cy="14.3" r="1.5" fill="#2A8060"/>
+        </svg>
+        Agent<span class="op">Oppa</span>
+      </div>
+      <div class="foot-links">
+        <a href="https://github.com/rhie-coder/AgentOppa">GitHub</a>
+        <a href="https://github.com/rhie-coder/AgentOppa/blob/main/LICENSE">License</a>
+        <a href="https://github.com/rhie-coder/AgentOppa/blob/main/README.md">문서</a>
+      </div>
+      <div class="fine">Cross-agent harness Maker · Claude Code · Codex · Windows · macOS · Linux</div>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+  (function(){
+    var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    /* scroll reveal */
+    var els = document.querySelectorAll('[data-reveal]');
+    if(reduce || !('IntersectionObserver' in window)){
+      els.forEach(function(el){el.classList.add('in');});
+    } else {
+      var io = new IntersectionObserver(function(entries){
+        entries.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); } });
+      }, {threshold:0.12, rootMargin:'0px 0px -8% 0px'});
+      els.forEach(function(el){io.observe(el);});
+    }
+
+    /* terminal demos */
+    document.querySelectorAll('[data-term]').forEach(function(term){
+      var lines = term.querySelectorAll('.tl');
+      var replay = term.querySelector('.term-replay');
+      if(reduce){ term.classList.remove('is-anim'); return; }
+
+      function play(){
+        if(replay) replay.hidden = true;
+        lines.forEach(function(l){ l.classList.remove('show'); });
+        var d = 0;
+        lines.forEach(function(l){
+          var fast = l.classList.contains('tl-ok') || l.classList.contains('tl-meta');
+          d += fast ? 300 : 640;
+          setTimeout(function(){ l.classList.add('show'); }, d);
+        });
+        if(replay) setTimeout(function(){ replay.hidden = false; }, d + 400);
+      }
+      if(replay) replay.addEventListener('click', play);
+
+      if('IntersectionObserver' in window){
+        var to = new IntersectionObserver(function(entries){
+          entries.forEach(function(e){ if(e.isIntersecting){ play(); to.unobserve(e.target); } });
+        }, {threshold:0.4});
+        to.observe(term);
+      } else { lines.forEach(function(l){l.classList.add('show');}); }
+    });
+
+    /* copy buttons */
+    document.querySelectorAll('.copy').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var pre = btn.closest('.code').querySelector('pre');
+        var text = pre.innerText.replace(/^#.*$/gm,'').split('\n').filter(function(l){return l.trim();}).join('\n');
+        navigator.clipboard.writeText(text).then(function(){
+          var old = btn.textContent; btn.textContent = '복사됨';
+          setTimeout(function(){ btn.textContent = old; }, 1400);
+        }).catch(function(){});
+      });
+    });
+  })();
+</script>
+</body>
+</html>
