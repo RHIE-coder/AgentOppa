@@ -88,6 +88,6 @@ config의 각 단계 정의를 읽어(ⓐ면 `.agentoppa/` Core 묶음의 단계
 - [../intent-interview/SKILL.md](../intent-interview/SKILL.md) — 1단계 면담 (의도 → `.harness/intent.md`, 두 모드 분기)
 - 전체 개념 모델: repo `ARCHITECTURE.md`
 
-## 병렬 (git-workflow) — 고급 🚧 (ROADMAP 보류)
+## 병렬 (git-workflow) — 고급 🚧 (지금 범위 밖)
 
 `feature = git worktree` 단위로 N개 동시. 에이전트끼리 **커밋된 문서로** 소통 → 레이스 없음. `decompose → seam-first → fan-out → integrate`. `{feature}` 스코프 + 커밋 문서 구조가 받쳐줌. *본체 위에 얹을 예정.*

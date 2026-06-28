@@ -117,8 +117,7 @@ for (const c of CASES) {
 
 // --- 자기 점검: 우리 자신의 커밋 문서는 dangling 상대링크가 0이어야 (검사기가 실제로 repo를 지키게) ---
 //     fixtures/ 는 의도적 반칙 입력이라 제외 — 그건 위 red/green CASE로 따로 검증한다.
-//     ROADMAP을 포함하는 이유: 임시 참조 파일을 지우면 그 포인터도 0이어야 함을 자동 강제("삭제 완료=참조 0").
-const SELF_CHECK = ["plugins", "README.md", "ROADMAP.md", "ARCHITECTURE.md", "AGENTS.md", "CLAUDE.md"];
+const SELF_CHECK = ["plugins", "README.md", "ARCHITECTURE.md", "AGENTS.md", "CLAUDE.md"];
 for (const tgt of SELF_CHECK) {
   test(`check-doc-refs 자기점검 — ${tgt} 의 dangling 상대링크는 0`, () => {
     const r = run("plugins/agentoppa/bin/check-doc-refs.mjs", tgt);
