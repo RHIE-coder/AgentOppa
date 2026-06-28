@@ -13,14 +13,31 @@ const err = (m) => { console.log(`  ${c.r}✗${c.x} ${m}`); errors++; };
 const warn = (m) => { console.log(`  ${c.y}⚠${c.x} ${m}`); warns++; };
 const ok = (m) => { console.log(`  ${c.g}✓${c.x} ${m}`); };
 
-const clean = (s) => s.replace(/\s*#.*$/, "").trim().replace(/^["']|["']$/g, "");
-const splitList = (s) => s.replace(/^\[|\]$/g, "").split(",").map((x) => x.trim()).filter(Boolean);
+// YAML 스칼라 값에서 인라인 주석(#)을 떼되 따옴표 안의 #는 보존(build-skills.mjs 와 동치 — parity 검사기가 강제).
+function stripComment(s) {
+  let inS = false, inD = false;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (ch === "'" && !inD) inS = !inS;
+    else if (ch === '"' && !inS) inD = !inD;
+    else if (ch === "#" && !inS && !inD) {
+      if (i === 0 || /\s/.test(s[i - 1])) return s.slice(0, i);
+    }
+  }
+  return s;
+}
+const clean = (s) => stripComment(s).trim().replace(/^["']|["']$/g, "");
+const splitList = (s) => stripComment(s).replace(/^\[|\]$/g, "").split(",").map((x) => x.trim().replace(/^["']|["']$/g, "")).filter(Boolean);
 
+const DUMP_CFG = process.env.PARSECONFIG_DUMP || null; // 동치 검사용: parseConfig 결과만 덤프하고 종료(아래 훅)
 const cfgPath = process.argv[2] ?? ".harness/config.yaml";
-console.log(`agent-engineer validate → ${cfgPath}`);
-if (!existsSync(cfgPath)) { err("config.yaml 없음"); process.exit(2); }
-const harnessDir = dirname(cfgPath);
-const raw = readFileSync(cfgPath, "utf8");
+let harnessDir = null, raw = null;
+if (!DUMP_CFG) {
+  console.log(`agent-engineer validate → ${cfgPath}`);
+  if (!existsSync(cfgPath)) { err("config.yaml 없음"); process.exit(2); }
+  harnessDir = dirname(cfgPath);
+  raw = readFileSync(cfgPath, "utf8");
+}
 
 // ---------- config.yaml 파서 (라인 기반, 이 양식 전용) ----------
 // (build-skills.mjs 의 parseConfig 와 동치 — bindings/impl 블록 파싱을 둘 다에 똑같이 둔다.)
@@ -91,6 +108,13 @@ function parsePhases(lines, i, cfg) {
   return i;
 }
 
+// 동치 검사 훅: PARSECONFIG_DUMP=<config> 면 parseConfig 결과만 JSON 으로 찍고 종료.
+//   (bin/check-parseconfig-parity.mjs 가 build-skills.mjs 의 parseConfig 와 동작 일치를 자식 프로세스로 대조.)
+if (DUMP_CFG) {
+  process.stdout.write(JSON.stringify(parseConfig(readFileSync(DUMP_CFG, "utf8"))));
+  process.exit(0);
+}
+
 // ---------- phase 파일 frontmatter 파서 ----------
 // requires 항목 한 개를 {key, optional, kind} 로 푼다. `:capability` 접미사 = 능력-빈자리, 없으면 값-빈자리.
 // (`needs:` 는 값-빈자리의 옛 이름 — 파서에서 같은 풀로 흡수한다.)
@@ -151,6 +175,14 @@ function parsePhase(name) {
 }
 
 const C = parseConfig(raw);
+
+// 줄단위 파서가 조용히 먹는 미지원 YAML 문법 사전 차단(조용한 누락 방지).
+//   블록 스칼라(|·>)는 멀티라인이라 이 양식 파서는 마커만 값으로 먹고 본문 줄을 흘린다 → error 로 알린다.
+//   (이 config 는 한 줄 스칼라·1-depth 블록·phases 리스트 전용. 멀티라인이 필요하면 한 줄+따옴표로.)
+raw.split(/\r?\n/).forEach((l, li) => {
+  if (/^\s*[A-Za-z_][\w-]*:\s*[|>][+-]?\d*\s*(#.*)?$/.test(l))
+    err(`${li + 1}행 블록 스칼라(|·>) 미지원 — 파서가 한 줄 값만 읽어 본문이 조용히 누락된다. 한 줄로 쓰거나 따옴표로: '${l.trim()}'`);
+});
 
 // --- 스칼라 ---
 const sync = C.scalars.sync ?? "medium";

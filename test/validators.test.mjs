@@ -54,6 +54,14 @@ const CASES = [
     green: ".agentoppa/fixtures/agent-engineer-bindings/green/.harness/config.yaml",
   },
   {
+    // 줄단위 config 파서가 블록 스칼라(|·>)를 조용히 먹는 걸 error 로 막는다(미지원 문법 사전 차단).
+    // red = values 에 블록 스칼라 → error · green = 같은 값을 한 줄로 → 통과.
+    name: "agent-engineer/parser — 미지원 블록 스칼라(|·>) 조용한 누락 차단",
+    validator: "plugins/agentoppa/skills/agent-engineer/scripts/validate.mjs",
+    red: ".agentoppa/fixtures/agent-engineer-blockscalar/red/.harness/config.yaml",
+    green: ".agentoppa/fixtures/agent-engineer-blockscalar/green/.harness/config.yaml",
+  },
+  {
     name: "intent-interview — 차단 미해결인데 status=ready 점검",
     validator: "plugins/agentoppa/skills/intent-interview/scripts/validate.mjs",
     red: ".agentoppa/fixtures/intent-interview/red/.harness/intent.md",
@@ -85,6 +93,30 @@ const CASES = [
     validator: "plugins/agentoppa/bin/check-no-qa-ref.mjs",
     red: ".agentoppa/fixtures/no-qa-ref/red",
     green: ".agentoppa/fixtures/no-qa-ref/green",
+  },
+  {
+    // always-on 이 금지 예시로 등재한 조어를 커밋 문서 본문이 쓰면 실패.
+    // 금지어는 fixture 안 always-on.md 에서 추출(단일소스) → red 의 doc.md 가 그 조어를 써서 실패해야.
+    name: "check-banned-terms — always-on 등재 금지 조어를 문서가 쓰면 실패",
+    validator: "plugins/agentoppa/bin/check-banned-terms.mjs",
+    red: ".agentoppa/fixtures/banned-terms/red",
+    green: ".agentoppa/fixtures/banned-terms/green",
+  },
+  {
+    // parseConfig 동치: build-skills ↔ validate 가 같은 config 에 같은 결과를 내야(아니면 빌드/검증 해석 갈림).
+    // green = 두 mjs 의 parseConfig 동작 동일 · red = phase 처리가 달라 drift → 검사기가 불일치를 잡아야.
+    name: "check-parseconfig-parity — 두 parseConfig 동작 drift 검출",
+    validator: "plugins/agentoppa/bin/check-parseconfig-parity.mjs",
+    red: ".agentoppa/fixtures/parseconfig-parity/red",
+    green: ".agentoppa/fixtures/parseconfig-parity/green",
+  },
+  {
+    // resume_equivalent: 중단→재개 산출이 무중단 산출과 *구조 동등*(역할 집합·순서·유효 헤더)인가.
+    // green = 두 세트 역할·순서 동일(내용 문장은 달라도 OK) · red = 재개본이 한 단계(impl) 누락 → 비동등.
+    name: "qa/resume — 중단본 vs 무중단본 산출 구조 동등(resume_equivalent)",
+    validator: "qa/checks/resume.mjs",
+    red: ".agentoppa/fixtures/resume-equivalent/red",
+    green: ".agentoppa/fixtures/resume-equivalent/green",
   },
 ];
 
@@ -137,5 +169,31 @@ test("check-no-qa-ref 자기점검 — plugins 는 qa 참조 0 (한방향)", () 
     r.status,
     0,
     `plugins(엔진) 가 disposable qa 트리를 참조함 — 엔진은 disposable 에 의존 금지\n${r.stdout}`,
+  );
+});
+
+// --- 자기 점검: always-on 이 금지 예시로 등재한 조어를 우리 커밋 문서가 본문에 쓰지 않는다 ---
+//     "쉬운 말로 쓴다(지어낸 말 금지)" 의 기계 조각. always-on.md 에서 금지어를 뽑아 repo 문서를 훑는다.
+//     검사기가 .agentoppa/qa/node_modules/.git 는 건너뜀 → fixtures 의 의도적 위반은 self-check 에서 제외.
+test("check-banned-terms 자기점검 — repo 문서에 금지 조어 0", () => {
+  const r = run("plugins/agentoppa/bin/check-banned-terms.mjs", ".");
+  assert.equal(
+    r.status,
+    0,
+    `커밋 문서에 always-on 등재 금지 조어가 있음 — 쉬운 말로 바꿀 것(검사기가 가리킨 파일:줄)\n${r.stdout}`,
+  );
+});
+
+// --- 자기 점검: 실제 build-skills ↔ validate 의 parseConfig 가 동작 동치 (인자 없이 = 두 실제 파일 대조) ---
+//     copyFileSync 배포라 코드 단일소스화는 불가 → 동작 동치를 검사기로 강제(drift 시 빌드/검증 해석이 갈림).
+test("check-parseconfig-parity 자기점검 — build-skills ↔ validate parseConfig 동치", () => {
+  const r = spawnSync(process.execPath, [abs("plugins/agentoppa/bin/check-parseconfig-parity.mjs")], {
+    cwd: repoRoot,
+    encoding: "utf8",
+  });
+  assert.equal(
+    r.status,
+    0,
+    `build-skills 와 validate 의 parseConfig 동작이 갈림(drift) — clean/splitList/파서를 맞출 것\n${r.stdout}`,
   );
 });

@@ -1,4 +1,4 @@
-# qa/ — AgentOppa 라이브 e2e QA (상시·in-repo·격리)
+# qa/ — AgentOppa 라이브 e2e(= 처음부터 끝까지 전체 흐름을 돌려보는 테스트) QA (상시·in-repo·격리)
 
 > AgentOppa가 *만든* 재사용 Core 하네스가 진짜 도는지 증명하는 **상시 QA 타깃**. 검사기 red/green 픽스처(`.agentoppa/fixtures/`, 초소형)와 달리, 여기엔 하네스가 *물고 도는 진짜 미니 프로젝트*(시드)가 산다.
 >
@@ -8,14 +8,14 @@
 
 - **대상(test subject)이다** — 프레임워크도 `examples/`도 아니다. 컴파일러 repo가 테스트용 샘플 프로그램을 싣는 것과 같다.
 - **한방향 의존:** 엔진(`plugins/agentoppa/`)은 이 트리를 **절대 참조하지 않는다.** 이 트리를 통째로 지워도 프레임워크는 멀쩡해야 한다. → `check-no-qa-ref` + `npm test`가 기계 강제.
-- **반대 방향(qa→plugins)** 은 허용(샘플→프레임워크)이나, `run.mjs`는 결합을 줄이려 자족적으로 둔다(자체 frontmatter 파서).
+- **반대 방향(qa→plugins)** 은 허용(샘플→프레임워크)이나, `run.mjs`는 결합을 줄이려 자족적으로 둔다(자체 frontmatter(= 문서 맨 위 `---` 사이에 적는 기계용 메타데이터) 파서).
 
 ## 구조
 
 ```
 qa/
 ├── README.md                 이 문서
-├── run.mjs                   시나리오 러너 (zero-dep Node · 돌고 끝남 = 검사 러너, 상주 실행기 아님)
+├── run.mjs                   시나리오 러너 (zero-dep(= 외부 패키지 의존 0) Node · 돌고 끝남 = 검사 러너, 상주 실행기 아님)
 ├── targets/web/
 │   ├── seeds/                커밋된 *시작상태* 픽스처 (pristine · 최소 · 읽기전용 입력)
 │   │   ├── greenfield/         거의 빈 진짜 web (/health) — [case1]
@@ -72,7 +72,7 @@ qa/
    - 멱등(재생성 diff=∅) → "두 번 돌려도 같다"의 사실.
 3. **깨끗한 기준점(baseline).** 시드를 scratch에 복사하고 git baseline을 찍으니, 그 뒤 모든 변화는 "AgentOppa가 한 일"로 귀속된다. 대조군이 있어야 "무엇이 바뀌었나"가 분명하다.
 4. **주관(가치)을 객관으로 환원.** "하네스가 좋은가"(L4)는 주관이라 내가 판단 못 한다 → 대신 "기능 합격테스트가 통과하나"라는 *실행가능 기준*으로 바꿔 기계가 판정. 이게 이 QA의 핵심 트릭.
-5. **거짓 green 금지(정직).** n=1은 신호지 통계 증명이 아니다. 일부 판정(contract·resume 등)은 아직 수동이라 러너가 `?`로 표시 — 자동인 척 안 한다.
+5. **거짓 green 금지(정직).** n=1은 신호지 통계 증명이 아니다. 판정 *로직*은 다 기계화돼 있고(red/green), 다만 일부는 라이브 산출 *수집*을 세션이 몰아야 완성된다(예: `resume_equivalent` 의 무중단·재개 2-run) — 러너는 판정만 하지 "전자동"인 척 안 한다.
 
 > 한 줄: **바꾸면 안 되는 건 `git diff`로, 돌아야 하는 건 테스트 exit code로** 떨어뜨려 판정에서 주관을 최대한 빼냈다.
 
@@ -91,5 +91,5 @@ node qa/run.mjs judge <caseId>       # 사후 판정 (diff·합격테스트·존
 러너가 **보장하는 것**: 셋업(seed→scratch+baseline)과 *사후* 기계 판정. **agent 단계(면담/생성/실행)** 는 대화형/헤드리스 세션이 따로 몬다 — 첫 바퀴는 손으로 몰 수도 있다. "전자동 버튼"은 과대선언이라 두지 않는다.
 예외: `vp1`(비전 증명)은 시드 자체가 완성된 두 바인딩이라 **agent 단계 없이** 셋업 직후 바로 judge — 자족형.
 
-기계화된 판정(JUDGES): `harness_present` · `project_unchanged` · `compiled_idempotent` · `acceptance` · `fits_existing_runner` · `foreign_harness_preserved` · `interview_gated` · `contract` · `source_edits_preserved` · `intent_reflected` · `core_reuse` · `unbound_errors`.
-아직 수동: `resume_equivalent` 만 — 중단본≡무중단본 2-run 동등성이라 단일 판정 불가(러너가 `?`로 표시). (완결성 자체는 `contract`+`acceptance`로 기계화됨.)
+기계화된 판정(JUDGES): `harness_present` · `project_unchanged` · `compiled_idempotent` · `acceptance` · `fits_existing_runner` · `foreign_harness_preserved` · `interview_gated` · `contract` · `source_edits_preserved` · `intent_reflected` · `core_reuse` · `unbound_errors` · `resume_equivalent`.
+`resume_equivalent` 는 *판정 로직*이 기계화됨 — 중단본 vs 무중단본의 **역할 집합·인계 순서·유효 헤더** 구조 동등(`checks/lib/resume.mjs`, red/green 픽스처로 검증). 내용 텍스트는 안 본다(LLM 생성이라 매번 다름 — "같은 단계를 같은 순서로 이었나"가 핵심). 라이브 2-run *수집*(무중단본 `.harness/artifacts-baseline/` + 재개본 `.harness/artifacts/` 두 산출 뜨기)만 세션이 몬다 — "전자동 버튼"은 과대선언이라 안 둔다.

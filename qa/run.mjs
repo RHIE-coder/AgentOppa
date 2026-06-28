@@ -12,6 +12,7 @@ import { spawnSync } from "node:child_process";
 // (plugins/ 의존 아님 — qa→qa 는 한방향 규칙 위반 아님. plugins 검증기는 §interview_gated 처럼 spawn 으로만 부른다.)
 import { judgeFitsRunner } from "./checks/lib/fits-runner.mjs";
 import { judgeContract, parseDocHeader } from "./checks/lib/contract.mjs";
+import { judgeResumeEquivalent } from "./checks/lib/resume.mjs";
 
 const QA = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(QA, "..");
@@ -166,6 +167,20 @@ const JUDGES = {
     return judgeContract(docs);
   },
 
+  resume_equivalent(work, kase) {
+    // 두 산출 세트 비교: 무중단(baseline) vs 중단→재개(resumed) 가 *구조 동등*인가.
+    //   라이브 2-run *수집* 은 세션이 몬다(정직 경계) — 러너는 *판정* 만(역할 집합·순서·유효 헤더 → lib/resume).
+    //   경로 컨벤션: baseline=.harness/artifacts-baseline/<feat>/ · resumed=.harness/artifacts/<feat>/.
+    //   (세션이 무중단 기준본을 -baseline 으로 따로 떠 둔다. 하나라도 없으면 2-run 미수집 → 안내.)
+    const feat = kase.feature || readConfigFeature(work);
+    const order = readPhaseOrder(work);
+    const baseline = loadArtifactDocs(work, "artifacts-baseline", feat, order);
+    const resumed = loadArtifactDocs(work, "artifacts", feat, order);
+    if (!baseline || !resumed)
+      return { ok: false, msg: `2-run 산출 필요 — baseline(.harness/artifacts-baseline/) ${baseline ? "있음" : "없음"} · resumed(.harness/artifacts/) ${resumed ? "있음" : "없음"}. 세션이 무중단·재개 두 산출을 떠야(라이브 수집).` };
+    return judgeResumeEquivalent(baseline, resumed);
+  },
+
   source_edits_preserved(work) {
     // build-skills 는 Project(.harness) 저작물을 읽기만 한다 — 재생성 후에도 config·intent·phases 가 그대로(수기편집 보존).
     const d = git(work, "diff", "--name-only", "--", ".harness/config.yaml", ".harness/intent.md", ".harness/project").stdout.trim();
@@ -280,6 +295,29 @@ function readPhaseOrder(work) {
     }
   }
   return order;
+}
+
+// artifacts 하위(<sub>/<feat 또는 첫 디렉터리>/) 의 단계 문서들을 인계순서로 [{role,hasHeader,header}] 로 읽는다.
+//   (resume_equivalent 의 두 세트 로딩 공용. order 있으면 phase 순서로, 없으면 파일명 정렬.)
+function loadArtifactDocs(work, sub, feat, order) {
+  const root = join(work, ".harness", sub);
+  if (!existsSync(root)) return null;
+  let fdir = feat ? join(root, feat) : null;
+  if (!fdir || !existsSync(fdir)) {
+    const dirs = readdirSync(root).filter((d) => statSync(join(root, d)).isDirectory());
+    if (!dirs.length) return null;
+    fdir = join(root, dirs[0]);
+  }
+  const files = readdirSync(fdir).filter((f) => f.endsWith(".md")).sort((a, b) => {
+    const ra = a.replace(/\.md$/, "").replace(/^\d+[-_]/, ""), rb = b.replace(/\.md$/, "").replace(/^\d+[-_]/, "");
+    const ia = order.indexOf(ra), ib = order.indexOf(rb);
+    if (ia !== -1 && ib !== -1) return ia - ib;
+    return a.localeCompare(b);
+  });
+  return files.map((f) => {
+    const { hasHeader, header } = parseDocHeader(readFileSync(join(fdir, f), "utf8"));
+    return { role: f.replace(/\.md$/, "").replace(/^\d+[-_]/, ""), hasHeader, header };
+  });
 }
 
 function setup(id) {

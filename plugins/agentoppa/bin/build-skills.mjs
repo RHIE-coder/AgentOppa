@@ -52,19 +52,23 @@ const defer = (m) => { console.log(`  ${c.b}DEFER${c.x} ${m}`); deferred.push(m)
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // ---------- 인자 ----------
+const DUMP_CFG = process.env.PARSECONFIG_DUMP || null; // 동치 검사용: parseConfig 결과만 덤프하고 종료(아래 훅)
 const projectRoot = process.argv[2];
-if (!projectRoot) {
-  console.log(`${c.r}사용법: node build-skills.mjs <project-root>${c.x}`);
-  console.log(`  예) node build-skills.mjs /path/to/my-project   (그 안의 .harness/ 를 .agentoppa/ Core 묶음으로 빌드)`);
-  process.exit(2);
-}
-const ROOT = resolve(projectRoot);
-const harnessDir = join(ROOT, ".harness");
-const cfgPath = join(harnessDir, "config.yaml");
-if (!existsSync(cfgPath)) { console.log(`${c.r}✗ config 없음: ${cfgPath}${c.x}`); process.exit(2); }
+let ROOT, harnessDir, cfgPath;
+if (!DUMP_CFG) {
+  if (!projectRoot) {
+    console.log(`${c.r}사용법: node build-skills.mjs <project-root>${c.x}`);
+    console.log(`  예) node build-skills.mjs /path/to/my-project   (그 안의 .harness/ 를 .agentoppa/ Core 묶음으로 빌드)`);
+    process.exit(2);
+  }
+  ROOT = resolve(projectRoot);
+  harnessDir = join(ROOT, ".harness");
+  cfgPath = join(harnessDir, "config.yaml");
+  if (!existsSync(cfgPath)) { console.log(`${c.r}✗ config 없음: ${cfgPath}${c.x}`); process.exit(2); }
 
-console.log(`${c.d}build-skills${c.x} ${ROOT}`);
-console.log(`${c.d}  Project${c.x} .harness/  ${c.d}→ Core 묶음${c.x} .agentoppa/ (자체완결: 마켓 2개 + plugins/<core>/)\n`);
+  console.log(`${c.d}build-skills${c.x} ${ROOT}`);
+  console.log(`${c.d}  Project${c.x} .harness/  ${c.d}→ Core 묶음${c.x} .agentoppa/ (자체완결: 마켓 2개 + plugins/<core>/)\n`);
+}
 
 // ---------- 작은 유틸 (값 정리 — 인라인주석 견고) ----------
 // YAML 스칼라 값에서 인라인 주석(#)을 떼되, 따옴표 안의 #는 보존한다.
@@ -154,6 +158,13 @@ function parseConfig(text) {
     }
     return i;
   }
+}
+
+// 동치 검사 훅: PARSECONFIG_DUMP=<config> 면 parseConfig 결과만 JSON 으로 찍고 종료.
+//   (bin/check-parseconfig-parity.mjs 가 validate.mjs 의 parseConfig 와 동작 일치를 자식 프로세스로 대조.)
+if (DUMP_CFG) {
+  process.stdout.write(JSON.stringify(parseConfig(readFileSync(DUMP_CFG, "utf8"))));
+  process.exit(0);
 }
 
 // ---------- phase 파일 파서 (frontmatter + 본문) ----------

@@ -1,0 +1,6 @@
+# 같은 값을 한 줄로 — 이 파서가 지원하는 문법(정상).
+feature: demo
+phases:
+  - plan
+values:
+  note: "여러 줄 설명을 한 줄로"
