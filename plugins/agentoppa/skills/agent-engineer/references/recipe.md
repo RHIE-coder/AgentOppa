@@ -2,6 +2,8 @@
 
 Config = **진실원천.** 고른 phase·순서·강도를 `.harness/config.yaml`에 적어 git 커밋한다. AgentOppa(Maker)이 이걸 읽어 phase 스킬들로 컴파일한다. phase 양식은 `phases.md`, 잇는 규칙은 `contract.md`.
 
+> **config는 두 경우로 생긴다:** ⓐ *Core를 짓는·단독* 프로젝트 — `agent-engineer` 면담이 이 config를 쓴다(저작). ⓑ *남의 Core를 설치해 쓰는* 소비 프로젝트 — 그 Core가 든 `setup` 스킬이 자기 `interface.json`(빈자리 명세)을 읽어 config 골격을 *깔아 준다*(AgentOppa 없이). 소비자는 능력 빈자리(`bindings`)만 이 프로젝트 구현으로 채운다. (build-skills가 모든 Core에 `setup`·`interface.json`을 주입한다.)
+
 ## config.yaml 양식
 
 ```yaml

@@ -112,3 +112,45 @@ test("build-skills 멱등 — 재컴파일해도 SKILL.md·README·CLAUDE.md·AG
     rmSync(work, { recursive: true, force: true });
   }
 });
+
+test("build-skills — 빌드된 Core 가 소비 프로젝트의 .harness 를 자급한다 (setup·interface·scaffold, AgentOppa 없이)", () => {
+  // 새 모델: 빌드된 Core(플러그인)가 *스스로* 소비 프로젝트의 .harness/config.yaml 을 깐다 → 프로젝트B는 AgentOppa 불필요.
+  //   여기선 (1) Core 묶음이 interface.json + setup 스킬 + scaffold 헬퍼를 싣는지, (2) 빈 소비 디렉터리에서
+  //   그 scaffold 만으로 config 골격이 깔리고 능력 빈자리가 노출되는지, (3) 재실행이 미채움을 보고(전파)하는지 잠근다.
+  const { work, r } = compileInTemp("bs-setup-");
+  const consumer = mkdtempSync(join(tmpdir(), "bs-consumer-"));
+  try {
+    assert.equal(r.status, 0, `build-skills 실패(exit ${r.status})\n${r.stdout}${r.stderr}`);
+    const core = join(work, ".agentoppa/plugins/demo");
+
+    // 1) Core 묶음이 인터페이스 명세 + setup 스킬 + scaffold 헬퍼를 싣는다.
+    const ifacePath = join(core, "interface.json");
+    assert.ok(existsSync(ifacePath), "interface.json 미생성");
+    const iface = JSON.parse(readFileSync(ifacePath, "utf8"));
+    assert.equal(iface.core, "demo", "interface.core 불일치");
+    assert.ok(iface.capabilities.some((c) => c.key === "test-runner"), "능력 빈자리 test-runner 가 interface 에 없음");
+    assert.ok(existsSync(join(core, "skills/setup/SKILL.md")), "setup 스킬 미생성");
+    assert.ok(existsSync(join(core, "skills/setup/scaffold.mjs")), "scaffold 헬퍼 미생성");
+
+    // 2) 소비 프로젝트(빈 디렉터리, AgentOppa 없음)가 Core 의 scaffold.mjs 만으로 .harness/config.yaml 을 깐다.
+    const s = spawnSync(process.execPath, [join(core, "skills/setup/scaffold.mjs")], {
+      encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: consumer },
+    });
+    assert.equal(s.status, 0, `scaffold 실패(exit ${s.status})\n${s.stdout}${s.stderr}`);
+    const cfgPath = join(consumer, ".harness/config.yaml");
+    assert.ok(existsSync(cfgPath), "소비 프로젝트 .harness/config.yaml 미생성");
+    const cfg = readFileSync(cfgPath, "utf8");
+    assert.ok(cfg.includes("core: demo"), "스캐폴딩된 config 가 Core 를 가리키지 않음");
+    assert.ok(/bindings:[\s\S]*test-runner:/.test(cfg), "스캐폴딩된 config 에 능력 빈자리(test-runner) 없음");
+
+    // 3) 멱등 + 전파: 다시 돌리면 안 채운 빈자리를 보고한다(덮어쓰지 않음).
+    const s2 = spawnSync(process.execPath, [join(core, "skills/setup/scaffold.mjs")], {
+      encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: consumer },
+    });
+    assert.equal(s2.status, 0, "scaffold 재실행 실패");
+    assert.ok(/안 채워진 능력 빈자리/.test(s2.stdout), "미채움 빈자리를 보고하지 않음(전파 신호 없음)");
+  } finally {
+    rmSync(work, { recursive: true, force: true });
+    rmSync(consumer, { recursive: true, force: true });
+  }
+});

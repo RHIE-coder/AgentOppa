@@ -42,6 +42,7 @@ agent-engineer/
 - **ⓐ**는 *값을 안 박는 게 일*이다 — 도구명 금지(`playwright` ✗, `e2e-runner` ✓), 단계는 능력을 일반명으로만 부른다. 산출 = `.agentoppa/` 자체완결 묶음(github·복붙으로 이식).
 - **ⓑ**는 *그 빈자리를 채우는 게 일*이다 — `config.bindings:{e2e-runner: playwright}` + 필요하면 구현 모듈. 같은 Core라도 프로젝트마다 `bindings` 한 줄만 다르다.
 - **`core:` 생략 = 단독 하네스.** Core를 따로 안 두고 `.harness/project/phases/`가 자기 단계를 직접 들 수도 있다(그대로 유효). 작게 시작하다 재사용이 필요해지면 그 단계들을 `.agentoppa/` Core로 추출한다(= ⓐ).
+- **소비자 자급(AgentOppa 없이):** build-skills는 모든 Core에 `setup` 스킬 + `interface.json`을 주입한다 → 남이 그 Core만 설치해도 `setup`이 `.harness/config.yaml`을 스스로 깐다(빈자리 노출, `bindings`만 채움). 즉 ⓑ는 *AgentOppa를 쓸 때*의 경로고, 없이 쓰면 Core의 `setup`이 같은 일을 한다.
 
 ## When to use
 - "워크플로우/파이프라인/하네스 만들어줘", "기획부터 개발까지 흐름", "리뷰·QA 자동화 흐름", "여러 작업 병렬로", "재사용할 워크플로우 프레임워크", "그 프레임워크를 이 프로젝트에 붙여".
