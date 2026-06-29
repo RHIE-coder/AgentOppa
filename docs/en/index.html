@@ -332,9 +332,10 @@
         </div>
         <div class="code">
           <div class="code-head"><span class="dot"></span><span class="lbl">Codex</span><button class="copy" type="button">Copy</button></div>
-<pre><span class="c"># Add the marketplace, then</span>
-<span class="c"># enable AgentOppa from the list</span>
-codex plugin marketplace add <span class="s">rhie-coder/agentoppa</span></pre>
+<pre><span class="c"># Register marketplace + install plugin</span>
+codex plugin marketplace add <span class="s">rhie-coder/agentoppa</span>
+codex plugin add <span class="s">agentoppa@agentoppa</span>
+<span class="c"># Project only? ask codex: "install this for this project only" (see README)</span></pre>
         </div>
       </div>
       <p class="note" data-reveal>All you need: <b>Node.js</b>. <a href="https://nodejs.org/en/download" target="_blank" rel="noopener">Install Node.js ↗</a></p>
