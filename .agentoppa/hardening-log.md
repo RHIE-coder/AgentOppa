@@ -153,3 +153,13 @@
 - **범위**: 배포 — ccc-hooks 는 유저 hooks 도 만든다. `plugins/agentoppa/skills/ccc-hooks/scripts/validate.mjs`.
 - **산출물**: ① validate.mjs top-level 여분 필드 검사(파일명 hooks.json 한정·cross/codex=error). ② examples/sample.md description 예시 제거. ③ AgentOppa hooks.json description 제거(인스턴스). ④ red/green 픽스처(`.agentoppa/fixtures/ccc-hooks-toplevel/`) + CASES 등록(45 통과).
 - **기대**: hooks.json 에 Codex 비호환 top-level 필드를 넣으면 검사기가 즉시 잡음 — 생성물·예시 다 막힘. 남은 한계: Codex 가 hooks 외 필드를 허용하게 되면 룰 갱신 필요(현재 "hooks 만"이 보수적). 유저의 codex 캐시는 재설치해야 description 제거가 반영됨.
+
+## 2026-06-29 · agent-engineer가 면담·모드분기·층분리를 건너뛰고 구현에 직행
+
+- **무슨 일**: 다른 프로젝트에서 유저가 agent-engineer 호출("기존 하네스를 다듬어 Codex도 Claude와 동일하게"). 에이전트가 1단계 면담(intent-interview)도, AgentOppa 핵심인 Core(`.agentoppa/`)/Project(`.harness/`) 층 분리도 안 한 채 그냥 기존 하네스를 얕게 동기화(한쪽 도구 설정만 베낌). = AgentOppa 존재 이유(층 나눠 재사용 자산 짓기)를 통째로 건너뜀. 유저가 "intent-interview 필요했고 .agentoppa도 안 만들었다"고 정정.
+- **왜 생겼나**: SKILL.md 본문에 5단계 루프(1.면담 → … )가 *서술형*으로만 있고, 스킬을 여는 순간 *반드시 통과해야 하는 하드 게이트*가 없었음 → 설명을 읽고도 곧장 구현에 직행 가능. 특히 "정리/다듬자"류 요청이 면담·층분리를 건너뛰는 함정.
+- **일반화**: 인스턴스(Codex 동기화·Rhaumos) 떼고 → "agent-engineer는 진입 게이트가 없어 모드분기·의도확인·층분리를 건너뛰고 구현에 직행할 수 있다 — 부류 전체." 특히 기존 하네스 *정리* 요청에서.
+- **수단 판정(순차)**: 검사기 = `validate.mjs`는 `.harness/config.yaml`이 있어야 도는 사후 검사라 "아예 안 만들고 기존만 손봄"은 검사가 돌지도 않아 못 잡음 → 단독 무력 ✗. 훅 = 스킬 로드엔 차단 지점 없음 ✗. 리뷰어/Gate(완료측) = 진입 누락엔 사후 ✗. **문서(진입 게이트) = 채택** — SKILL.md 본문 *맨 위* self-gate는 스킬 로드 때 매번 읽히는 자리라 "진입 누락"이라는 맹점에 유일하게 듣는다. 보조로 ## Gate에 "intent.md 존재+모드 확정" 한 줄.
+- **범위**: 배포 — agent-engineer는 유저 배포 스킬, 유저가 써도 같은 직행. `plugins/agentoppa/skills/agent-engineer/`.
+- **산출물**: ① SKILL.md 맨 위 "⛔ 시작 전 게이트 — 구현 직행 금지"(모드 가르기 + intent.md 면담 + Core/Project 층 나누기, 못 통과면 5단계 진입 금지). ② ## Gate 첫 줄에 "시작 전 게이트 통과: 모드 확정+intent.md 존재" 추가.
+- **기대**: agent-engineer는 모드 분기 + intent.md 확인 + 층분리 자리잡기를 통과해야만 5단계 루프에 진입. "정리해줘"에도 얕은 동기화로 끝나지 않음. 남은 한계: 진입은 행동 순서라 사후 검사기로 못 받침 — 매번 읽히는 본문 게이트가 최선.
