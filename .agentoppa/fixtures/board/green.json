@@ -1,0 +1,19 @@
+{
+  "title": "테스트 보드",
+  "subtitle": "green 픽스처 — 유효 입력",
+  "banners": [{ "kind": "warn", "html": "읽기용" }],
+  "legend": [{ "color": "#111111", "label": "무엇" }],
+  "flow": ["a", "→", "b", { "loop": "loop { x }" }],
+  "cards": [
+    {
+      "accent": "#2563eb", "num": "1", "title": "플랫폼 짓고 키우기",
+      "badge": "단위: 1개", "opt": "선택", "tags": ["면담"],
+      "gist": "한 줄 요약",
+      "rows": [
+        { "label": "무엇", "value": "어댑터 추가 <code>spec</code>", "kind": "what" },
+        { "label": "이점", "value": "누락 방지", "kind": "benefit" }
+      ]
+    }
+  ],
+  "foot": "진실원천은 .harness 문서"
+}
