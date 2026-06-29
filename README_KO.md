@@ -116,6 +116,17 @@ codex plugin marketplace remove rhie-coder/agentoppa
 
 - 등록 후 세션의 플러그인 목록에서 **AgentOppa를 켭니다.** Codex엔 핫리로드가 없어, 켜거나 업데이트한 뒤 **다시 시작**하면 반영됩니다.
 
+> **고급 · 이 프로젝트에만 설치(Project Scope).** Codex는 Claude 같은 설치 범위 선택(User/Project/Local)이 없어 기본은 전역 `~/.codex`에 등록됩니다. 이 프로젝트에만 두려면 `CODEX_HOME`을 프로젝트 폴더로 돌리세요 — 그 `.codex/`를 커밋하면 팀과 공유됩니다.
+> ```bash
+> # macOS · Linux (bash/zsh)
+> mkdir -p .codex && CODEX_HOME="$PWD/.codex" codex plugin marketplace add rhie-coder/agentoppa
+> ```
+> ```powershell
+> # Windows (PowerShell)
+> mkdir .codex -Force; $env:CODEX_HOME="$PWD\.codex"; codex plugin marketplace add rhie-coder/agentoppa
+> ```
+> 이후 codex를 실행할 때도 같은 `CODEX_HOME`이 필요합니다 — 매번 주기 번거로우면 `.envrc`(direnv)로 자동화하세요.
+
 ---
 
 ## 쓰는 법

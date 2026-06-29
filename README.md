@@ -116,6 +116,17 @@ codex plugin marketplace remove rhie-coder/agentoppa
 
 - After adding, **enable AgentOppa** in the session's plugin list. Codex has no hot-reload — **restart** after enabling or updating.
 
+> **Advanced · install for this project only (Project Scope).** Codex has no install-scope choice (User/Project/Local) like Claude, so by default it registers globally in `~/.codex`. To keep it to this project, point `CODEX_HOME` at a project folder — commit that `.codex/` to share with your team.
+> ```bash
+> # macOS · Linux (bash/zsh)
+> mkdir -p .codex && CODEX_HOME="$PWD/.codex" codex plugin marketplace add rhie-coder/agentoppa
+> ```
+> ```powershell
+> # Windows (PowerShell)
+> mkdir .codex -Force; $env:CODEX_HOME="$PWD\.codex"; codex plugin marketplace add rhie-coder/agentoppa
+> ```
+> You'll need the same `CODEX_HOME` whenever you run codex afterward — automate it with `.envrc` (direnv) if passing it each time gets tedious.
+
 ---
 
 ## Usage
