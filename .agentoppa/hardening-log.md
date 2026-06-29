@@ -143,3 +143,13 @@
 - **범위**: 배포 — intent-interview 는 유저 Core 면담에도 쓰임. `plugins/agentoppa/skills/intent-interview/`.
 - **산출물**: ① SKILL.md 도입에 "면담 전 — 두 대전제"(ⓒ 하네스≠앱 + ⓓ 내부 용어 금지) ② "면담 수준 고르기" 교정(사용자에게 안 묻고 추론·첫 질문 금지·애매하면 재사용 기본) ③ method.md "하지 말 것"에 "앱을 만들려 들기"·"내부 용어·은어로 묻기" 추가.
 - **기대**: 면담이 "앱을 직접 짠다"로 새지 않고 하네스에 머문다. 초보도 앱 개발로 오인 안 함. 질문이 일상어. 남은 한계: "쉬운 말인지/앱으로 샜는지"는 주관(맹점)이라 문서 강화가 최선 — 검사기로는 못 받친다.
+
+## 2026-06-29 · hooks.json top-level 의 description → Codex 파싱 거부(자기 훅이 Codex 에서 안 돎)
+
+- **무슨 일**: 유저가 Codex 에서 AgentOppa 쓰자 `failed to parse plugin hooks config …/hooks.json: unknown field 'description', expected 'hooks'`. AgentOppa hooks.json 맨 위 `description` 을 Codex 가 거부(hooks.json top-level 은 `hooks` 만). Claude 는 봐줘서 개발 중 안 드러났고 — 크로스툴이 본령인데 자기 훅이 Codex 에서 안 돎. ccc-hooks validate 는 `data.hooks` 만 보고 top-level 여분 필드를 안 잡았고, examples/sample.md 도 description 예시라 따라하면 같은 에러.
+- **왜 생겼나**: Claude 관용성 탓에 개발 중엔 안 터지고 Codex 에서만 터지는 맹점. validate 가 hooks 블록만 검사 → description 통과. 잘못된 예시까지 있어 전파 위험.
+- **일반화**: 인스턴스(description) 떼고 → "hooks.json top-level 은 Codex 가 `hooks` 만 받는다 — 여분 필드(description 등)는 Codex 가 파싱 거부. cross/codex 대상이면 금지." (settings.json 은 hooks 외 키가 정상이라 파일명이 hooks.json 일 때만 검사.)
+- **수단 판정(순차)**: 검사기 = top-level 필드는 기계 판정 가능 → **채택**(+red/green). 훅·리뷰어·Gate·문서 = 부적합. 기계 룰이 원본.
+- **범위**: 배포 — ccc-hooks 는 유저 hooks 도 만든다. `plugins/agentoppa/skills/ccc-hooks/scripts/validate.mjs`.
+- **산출물**: ① validate.mjs top-level 여분 필드 검사(파일명 hooks.json 한정·cross/codex=error). ② examples/sample.md description 예시 제거. ③ AgentOppa hooks.json description 제거(인스턴스). ④ red/green 픽스처(`.agentoppa/fixtures/ccc-hooks-toplevel/`) + CASES 등록(45 통과).
+- **기대**: hooks.json 에 Codex 비호환 top-level 필드를 넣으면 검사기가 즉시 잡음 — 생성물·예시 다 막힘. 남은 한계: Codex 가 hooks 외 필드를 허용하게 되면 룰 갱신 필요(현재 "hooks 만"이 보수적). 유저의 codex 캐시는 재설치해야 description 제거가 반영됨.

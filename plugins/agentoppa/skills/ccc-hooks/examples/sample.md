@@ -4,7 +4,6 @@
 
 ```json
 {
-  "description": "AgentOppa verify — run the project's declared verification on code change; block the turn on failure.",
   "hooks": {
     "Stop": [
       {

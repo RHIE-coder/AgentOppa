@@ -1,5 +1,4 @@
 {
-  "description": "AgentOppa — 세션 시작 시: ① always-on 규칙을 끼워넣는다(매 스킬에 안 적어도 적용) ② 처리 안 한 정정이 있으면 알린다(막지 않음).",
   "hooks": {
     "SessionStart": [
       {

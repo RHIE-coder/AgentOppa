@@ -118,6 +118,15 @@ const CASES = [
     red: ".agentoppa/fixtures/resume-equivalent/red",
     green: ".agentoppa/fixtures/resume-equivalent/green",
   },
+  {
+    // 라이브 발견 버그 가드: Codex 는 hooks.json top-level 에서 `hooks` 만 받음(description 등 여분 필드는
+    // "unknown field" 로 파싱 거부 → 플러그인 훅이 Codex 에서 안 돎). red = description 있는 hooks.json →
+    // cross 검사 실패 · green = hooks 만 → 통과. (파일명이 hooks.json 일 때만 top-level 을 본다.)
+    name: "ccc-hooks/toplevel — hooks.json 여분 top-level 필드(Codex 거부) 차단",
+    validator: "plugins/agentoppa/skills/ccc-hooks/scripts/validate.mjs",
+    red: ".agentoppa/fixtures/ccc-hooks-toplevel/red/hooks.json",
+    green: ".agentoppa/fixtures/ccc-hooks-toplevel/green/hooks.json",
+  },
 ];
 
 function run(validator, target) {

@@ -44,6 +44,16 @@ const NO_BLOCK = new Set(["PostToolUse", "PostCompact", "SessionStart", "Subagen
 const wantCodex = target === "cross" || target === "codex";
 let portable = true;
 
+// --- top-level 여분 필드 (Codex 는 hooks.json 에서 `hooks` 만 받음 — description 등은 파싱 거부) ---
+// settings.json 은 hooks 외 키가 정상이므로, 파일명이 hooks.json 일 때만 본다.
+if (/(^|[\\/])hooks\.json$/.test(file)) {
+  for (const key of Object.keys(data)) {
+    if (key === "hooks") continue;
+    if (wantCodex) { err(`top-level '${key}' 필드 — Codex 가 hooks.json 에서 거부함('hooks' 만 허용). 제거하라`); portable = false; }
+    else warn(`top-level '${key}' 필드 — Claude 는 봐주나 Codex 는 파싱 거부(이식 시 제거)`);
+  }
+}
+
 for (const [event, entries] of Object.entries(hooks)) {
   // 이벤트명 유효성
   if (CODEX.has(event)) ok(`이벤트 '${event}' — 공통(양쪽 동작 가능)`);

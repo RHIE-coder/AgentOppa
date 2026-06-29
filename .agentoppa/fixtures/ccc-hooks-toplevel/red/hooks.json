@@ -1,0 +1,8 @@
+{
+  "description": "codex 가 거부하는 top-level 필드 (red)",
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [ { "type": "command", "command": "node hook.mjs" } ] }
+    ]
+  }
+}
